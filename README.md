@@ -7,6 +7,7 @@ Code-only repository for the Valid Dictionary (VD) engine.
 - Core engine: `engine.py`
 - Residual machinery: `residual.py`, `definiens.py`
 - Simulator inspection layer: `simulator.py`
+- REPL inspection loop: `repl.py`
 - Newton case study: `newton.py`
 - Display/visualisation helpers: `display.py`, `viz.py`, `vd_demo.py`
 - Tests: `test_*.py`
@@ -23,4 +24,4 @@ python -m pip install -r requirements.txt
 pytest test_*.py
 ```
 
-Expected baseline: 120 passing tests.
+Expected baseline: 145 passing tests.

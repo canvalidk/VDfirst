@@ -21,6 +21,7 @@ as the implementation/test surface.
 - `definiens.py` - `Definiens` type. `Residual` paired with parallel
   headwords. Tokeniser output and simulator-facing object.
 - `simulator.py` - read-only inspection oracle over a `VDInstance`.
+- `repl.py` - command loop for read-only simulator inspection commands.
 - `newton.py` - Newton case study entries.
 - `display.py`, `viz.py` - report rendering and graphviz output.
 - `vd_demo.py` - demo entry point.
@@ -28,11 +29,12 @@ as the implementation/test surface.
 
 ## Current State
 
-- `Residual`, `Definiens`, `Tokeniser.analyse`, `VDInstance.analyse`, and
-  `Simulator` inspection primitives are implemented.
-- Expected test result: 120 passing tests.
-- Next likely work: simulator REPL loop with `headwords`, `count`, and
-  `recall` inspection commands, still without trace mutation.
+- `Residual`, `Definiens`, `Tokeniser.analyse`, `VDInstance.analyse`,
+  `Simulator` inspection primitives, and the phase-2 inspection REPL are
+  implemented.
+- Expected test result: 145 passing tests.
+- Next likely work: trace bootstrap and demand graph design, or a
+  phase-2.5 presentation command such as `show <headword>`.
 
 ## Conventions
 
@@ -80,8 +82,7 @@ triplets.
 ## Simulator Roadmap
 
 1. Inspection primitives: done.
-2. Input loop + REPL: next. Use injectable `input_fn` and `print_fn` so
-   tests can replay command sessions.
+2. Input loop + REPL: done for `headwords`, `count`, and `recall`.
 3. Demand graph + trace state: not yet committed.
 4. In-trace commands: `EXPAND`, `RECALL`, `INJECT`, `SKIP`, navigation,
    worklist/state display.
