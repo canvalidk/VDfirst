@@ -20,7 +20,10 @@ Changes in v0.6 (from v0.5):
   - Acting-object ownership bug resolved (see vd_acting_object_fix.md)
 """
 
-from vd.engine import VDInstance
+try:
+    from vd.engine import VDInstance
+except ModuleNotFoundError:
+    from engine import VDInstance
 
 # Section metadata for display purposes
 SECTIONS = {

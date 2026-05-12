@@ -130,6 +130,13 @@ class TestHeadwords:
             "particle",
         ]
 
+    def test_all_headwords_alias_works(self, small_sim):
+        assert drive(small_sim, ["ALL_HEADWORDS"]) == [
+            "force",
+            "mass",
+            "particle",
+        ]
+
 
 class TestCount:
 

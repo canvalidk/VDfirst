@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from demand import Demand, ExpandProvenance, InjectProvenance, Trace
 from simulator import Simulator
 
 
 class REPL:
-    """Input loop hosting read-only simulator inspection commands."""
+    """Input loop hosting simulator inspection and trace commands."""
 
     def __init__(
         self,
@@ -17,12 +18,21 @@ class REPL:
         print_fn: Callable[..., None] = print,
     ) -> None:
         self.sim = sim
+        self.trace: Trace | None = None
         self.input_fn = input_fn
         self.print_fn = print_fn
         self.dispatch = {
+            "all_headwords": self.cmd_headwords,
+            "back": self.cmd_back,
+            "cancel": self.cmd_cancel,
+            "expand": self.cmd_expand,
             "headwords": self.cmd_headwords,
+            "inject": self.cmd_inject,
             "count": self.cmd_count,
             "recall": self.cmd_recall,
+            "state": self.cmd_state,
+            "trace": self.cmd_trace,
+            "up": self.cmd_up,
         }
 
     def run(self) -> None:
@@ -33,7 +43,7 @@ class REPL:
     def step(self) -> bool:
         """Read one input, dispatch it, and report whether to continue."""
         try:
-            line = self.input_fn("> ")
+            line = self.input_fn(self._prompt())
         except EOFError:
             return False
         except KeyboardInterrupt:
@@ -58,6 +68,9 @@ class REPL:
         handler(rest)
         return True
 
+    def _prompt(self) -> str:
+        return "trace> " if self.trace is not None else "> "
+
     def cmd_headwords(self, rest: str) -> None:
         """Print all known headwords, one per line."""
         for headword in self.sim.all_headwords():
@@ -71,6 +84,14 @@ class REPL:
         )
 
     def cmd_recall(self, rest: str) -> None:
+        """Recall entry text, or fill a trace hole while inside a trace."""
+        if self.trace is not None:
+            self._cmd_trace_recall(rest)
+            return
+
+        self._cmd_inspection_recall(rest)
+
+    def _cmd_inspection_recall(self, rest: str) -> None:
         """Print entries matching a headword, prompting on redefinitions."""
         headword = rest.strip()
         if not headword or headword == '""':
@@ -106,3 +127,214 @@ class REPL:
             self.print_fn(f"E{chosen}: {self.sim.entry_text(chosen)}")
         except IndexError as exc:
             self.print_fn(str(exc))
+
+    def cmd_trace(self, rest: str) -> None:
+        """Start a trace from user text."""
+        if self.trace is not None:
+            self.print_fn(
+                "trace only valid outside a trace; "
+                "use 'cancel' first"
+            )
+            return
+
+        text = rest.strip()
+        if not text:
+            self.print_fn("usage: trace <text>")
+            return
+
+        self.trace = Trace.start(self.sim, text)
+        self.print_fn("trace started.")
+        self.cmd_state("")
+        self._announce_completion()
+
+    def cmd_state(self, rest: str) -> None:
+        """Print the active demand's current rendering."""
+        if not self._require_trace():
+            return
+
+        assert self.trace is not None
+        active = self.trace.active
+        self.print_fn(active.text())
+        if active.open_positions:
+            positions = ", ".join(str(p) for p in active.open_positions)
+            self.print_fn(f"open positions: {positions}")
+        else:
+            self.print_fn("open positions: none")
+
+    def cmd_expand(self, rest: str) -> None:
+        """Expand an active trace hole into a dictionary entry child."""
+        if not self._require_trace():
+            return
+
+        assert self.trace is not None
+        active = self.trace.active
+        pos = self._position_for_hole_command(rest, active)
+        if pos is None:
+            return
+
+        headword = active.headword_at(pos)
+        index = self._pick_entry_index(headword)
+        if index is None:
+            return
+
+        text = self.sim.entry_text(index)
+        child = Demand(
+            self.sim.analyse(text),
+            provenance=ExpandProvenance(index),
+        )
+        active.resolve_expand(pos, child, source_index=index)
+        self.trace.active = child
+        self.print_fn(f"expanded E{index} at position {pos}; now at child.")
+        self._announce_completion()
+
+    def _cmd_trace_recall(self, rest: str) -> None:
+        """Fill an active trace hole with raw dictionary entry text."""
+        assert self.trace is not None
+        active = self.trace.active
+        pos = self._position_for_hole_command(rest, active)
+        if pos is None:
+            return
+
+        headword = active.headword_at(pos)
+        index = self._pick_entry_index(headword)
+        if index is None:
+            return
+
+        active.resolve_recall(pos, self.sim.entry_text(index), index)
+        self.print_fn(f"recalled E{index} at position {pos}.")
+        self._announce_completion()
+
+    def cmd_inject(self, rest: str) -> None:
+        """Inject user text as a child demand at an active trace hole."""
+        if not self._require_trace():
+            return
+
+        assert self.trace is not None
+        active = self.trace.active
+        pos = self._position_for_hole_command(rest, active)
+        if pos is None:
+            return
+
+        text = self.input_fn("text: ").strip()
+        if not text:
+            self.print_fn("inject aborted: no text")
+            return
+
+        child = Demand(
+            self.sim.analyse(text),
+            provenance=InjectProvenance(text),
+        )
+        active.resolve_inject(pos, child)
+        self.trace.active = child
+        self.print_fn(f"injected at position {pos}; now at child.")
+        self._announce_completion()
+
+    def cmd_up(self, rest: str) -> None:
+        """Move active trace focus to its parent demand."""
+        if not self._require_trace():
+            return
+
+        assert self.trace is not None
+        try:
+            self.trace.up()
+        except ValueError:
+            self.print_fn("already at root")
+            return
+
+        self.print_fn("moved up.")
+
+    def cmd_back(self, rest: str) -> None:
+        """Back out of the active child."""
+        if not self._require_trace():
+            return
+
+        assert self.trace is not None
+        active = self.trace.active
+        parent = active.parent
+        if parent is None:
+            self.print_fn("already at root")
+            return
+
+        for pos, child in parent.children().items():
+            if child is active:
+                parent.unresolve(pos)
+                self.trace.active = parent
+                self.print_fn(f"backed out of child at position {pos}.")
+                return
+
+        self.print_fn("could not find active child on parent")
+
+    def cmd_cancel(self, rest: str) -> None:
+        """Cancel the whole trace."""
+        if not self._require_trace():
+            return
+
+        self.trace = None
+        self.print_fn("trace cancelled.")
+
+    def _require_trace(self) -> bool:
+        if self.trace is None:
+            self.print_fn("not in a trace; use 'trace <text>' to start one")
+            return False
+        return True
+
+    def _position_for_hole_command(
+        self,
+        rest: str,
+        active: Demand,
+    ) -> int | None:
+        raw = rest.strip()
+        if not raw:
+            if not active.open_positions:
+                self.print_fn("no open holes; use 'up' or 'back'")
+                return None
+            return active.open_positions[0]
+
+        try:
+            pos = int(raw)
+        except ValueError:
+            self.print_fn("invalid position")
+            return None
+
+        try:
+            active.headword_at(pos)
+        except ValueError as exc:
+            self.print_fn(str(exc))
+            return None
+
+        if pos not in active.open_positions:
+            self.print_fn(f"position {pos} is already resolved")
+            return None
+
+        return pos
+
+    def _pick_entry_index(self, headword: str) -> int | None:
+        idxs = self.sim.entry_indexes(headword)
+        if not idxs:
+            self.print_fn(f"no entry for '{headword}'")
+            return None
+
+        if len(idxs) == 1:
+            return idxs[0]
+
+        self.print_fn(f"multiple entries for '{headword}':")
+        for index in idxs:
+            self.print_fn(f"  E{index}: {self.sim.entry_text(index)}")
+
+        pick = self.input_fn("pick E-number: ")
+        try:
+            chosen = int(pick)
+        except ValueError:
+            self.print_fn("invalid choice; aborted")
+            return None
+
+        if chosen not in idxs:
+            self.print_fn("invalid choice; aborted")
+            return None
+
+        return chosen
+
+    def _announce_completion(self) -> None:
+        if self.trace is not None and self.trace.is_complete:
+            self.print_fn("trace complete.")
+            self.print_fn(self.trace.root.text())
