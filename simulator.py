@@ -5,8 +5,8 @@ The inspection layer used by the REPL: pure, read-only queries over the
 dictionary plus an `analyse` pass-through that produces a Definiens. No
 I/O, no trace state, no mutation of the underlying VDInstance.
 
-The REPL (forthcoming) does dispatch, prompts, and trace state. This
-file is the data layer it queries.
+The REPL does dispatch, prompts, and trace state. This file is the data
+layer it queries.
 
 Conventions:
   - 'index' is an E-number (0-based, matching VDInstance.entries).
@@ -25,9 +25,9 @@ from definiens import Definiens
 class Simulator:
     """Read-only oracle over a VDInstance.
 
-    Inspection commands and (eventually) the trace machinery query
-    this. Construction takes a VDInstance and holds it on `.instance`;
-    the simulator never mutates it.
+    Inspection and trace commands query this. Construction takes a
+    VDInstance and holds it on `.instance`; the simulator never mutates
+    it.
     """
 
     def __init__(self, instance: VDInstance):
