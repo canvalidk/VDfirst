@@ -11,6 +11,7 @@ Code-only repository for the Valid Dictionary (VD) engine.
 - Trace demand state: `demand.py`
 - Newton case study: `newton.py`
 - Display/visualisation helpers: `display.py`, `viz.py`, `vd_demo.py`
+- Specs archive: `specs/`
 - Tests: `test_*.py`
 
 ## Setup
