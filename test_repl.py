@@ -56,6 +56,34 @@ def drive(sim: Simulator, inputs: list[str]) -> list[str]:
     return out
 
 
+def help_line(name: str, description: str) -> str:
+    return f"  {name:<28}{description}"
+
+
+EXPECTED_HELP = [
+    "always available:",
+    help_line("all_headwords, headwords", "list all headwords"),
+    help_line("count", "entry and headword counts"),
+    help_line("exit, quit", "leave the REPL"),
+    help_line("help", "this list"),
+    help_line(
+        "recall <headword>",
+        "show a dictionary entry (or fill a hole in trace)",
+    ),
+    help_line("trace <text>", "start a new trace"),
+    "",
+    "trace-only:",
+    help_line("back", "undo the active child, return to its parent"),
+    help_line("cancel", "abandon the entire trace"),
+    help_line("expand [pos]", "expand an open hole into a dictionary entry"),
+    help_line("go to N, goto N", "move active focus to worklist entry N"),
+    help_line("inject [pos]", "fill an open hole with user-supplied text"),
+    help_line("state", "show the active demand"),
+    help_line("up", "move active focus to the parent demand"),
+    help_line("worklist", "list all open holes across the tree"),
+]
+
+
 class TestLoopMechanics:
 
     def test_one_command_then_exhausted_input_exits_cleanly(self, empty_sim):
@@ -102,6 +130,12 @@ class TestLoopMechanics:
         ).run()
 
         assert out == ["", "3 entries, 3 distinct headwords"]
+
+
+class TestHelp:
+
+    def test_help_outside_trace_prints_command_groups(self, small_sim):
+        assert drive(small_sim, ["help"]) == EXPECTED_HELP
 
 
 class TestHeadwords:

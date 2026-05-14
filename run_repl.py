@@ -9,7 +9,13 @@ from simulator import Simulator
 
 def main() -> None:
     vd = build_newton_instance()
-    REPL(Simulator(vd)).run()
+    sim = Simulator(vd)
+    print(
+        f"{vd.name} - {sim.entry_count()} entries, "
+        f"{sim.headword_count()} distinct headwords. "
+        "type 'help' for commands."
+    )
+    REPL(sim).run()
 
 
 if __name__ == "__main__":

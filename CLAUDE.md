@@ -21,7 +21,10 @@ as the implementation/test surface.
 - `definiens.py` - `Definiens` type. `Residual` paired with parallel
   headwords. Tokeniser output and simulator-facing object.
 - `simulator.py` - read-only inspection oracle over a `VDInstance`.
-- `repl.py` - command loop for read-only simulator inspection commands.
+- `demand.py` - demand graph and trace state over immutable `Definiens`
+  objects.
+- `repl.py` - command loop for simulator inspection and trace commands.
+- `run_repl.py` - launcher for the Newton simulator REPL.
 - `newton.py` - Newton case study entries.
 - `display.py`, `viz.py` - report rendering and graphviz output.
 - `vd_demo.py` - demo entry point.
@@ -30,11 +33,16 @@ as the implementation/test surface.
 ## Current State
 
 - `Residual`, `Definiens`, `Tokeniser.analyse`, `VDInstance.analyse`,
-  `Simulator` inspection primitives, and the phase-2 inspection REPL are
-  implemented.
-- Expected test result: 145 passing tests.
-- Next likely work: trace bootstrap and demand graph design, or a
-  phase-2.5 presentation command such as `show <headword>`.
+  `Simulator` inspection primitives, demand graph state, trace
+  bootstrap, and REPL trace commands are implemented.
+- The REPL exposes `help`, `headwords`, `count`, `recall`, `trace`,
+  `expand`, `inject`, `worklist`, `goto` / `go to`, `state`, `up`,
+  `back`, and `cancel`.
+- `run_repl.py` is the Newton simulator entry point.
+- Expected test result: 220 passing tests.
+- Next likely work: Design 2.1 interaction integration, richer trace
+  presentation such as `tree` or `show <headword>`, and any automated
+  compression-on-resolve UX if it is still wanted.
 
 ## Conventions
 
@@ -82,21 +90,18 @@ triplets.
 ## Simulator Roadmap
 
 1. Inspection primitives: done.
-2. Input loop + REPL: done for `headwords`, `count`, and `recall`.
-3. Demand graph + trace state: not yet committed.
-4. In-trace commands: `EXPAND`, `RECALL`, `INJECT`, `SKIP`, navigation,
-   worklist/state display.
+2. Input loop + REPL: done for inspection commands.
+3. Demand graph + trace state: done in `demand.py`.
+4. In-trace commands: `EXPAND`, `RECALL`, `INJECT`, navigation,
+   worklist/state display, and `goto` are done. A named `SKIP` verb is
+   not implemented; `goto` covers the user-level workflow for now.
 
-Open design questions should be surfaced before implementation:
+Deferred design questions:
 
-- Does `RECALL` keep one keyword with context-sensitive behaviour inside
-  and outside trace mode?
-- Should demand graph resolution mutate parent `Definiens`, or store
-  resolutions separately by original hole position?
-- How should injected free text record provenance?
-- What should multi-entry `RECALL` show when a headword has several
-  entries?
-- What is the default worklist ordering?
+- Whether automatic compression-on-resolve belongs in Design 2.1.
+- Whether a full `tree` command should display the demand graph.
+- How much provenance should appear inline in `state`.
+- Whether trace save/restore or multi-trace sessions are needed.
 
 ## Working Pattern
 

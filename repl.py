@@ -8,6 +8,14 @@ from demand import Demand, ExpandProvenance, InjectProvenance, Trace
 from simulator import Simulator
 
 
+PICK_PREVIEW_WIDTH = 60
+PICK_TRUNCATION_MARKER = "..."
+
+# Message convention: action confirmations are lowercase and end with a
+# period. Refusals and status displays are lowercase and do not, unless
+# a command-specific contract says otherwise.
+
+
 class REPL:
     """Input loop hosting simulator inspection and trace commands."""
 
@@ -26,13 +34,17 @@ class REPL:
             "back": self.cmd_back,
             "cancel": self.cmd_cancel,
             "expand": self.cmd_expand,
+            "go": self.cmd_go,
+            "goto": self.cmd_goto,
             "headwords": self.cmd_headwords,
+            "help": self.cmd_help,
             "inject": self.cmd_inject,
             "count": self.cmd_count,
             "recall": self.cmd_recall,
             "state": self.cmd_state,
             "trace": self.cmd_trace,
             "up": self.cmd_up,
+            "worklist": self.cmd_worklist,
         }
 
     def run(self) -> None:
@@ -70,6 +82,43 @@ class REPL:
 
     def _prompt(self) -> str:
         return "trace> " if self.trace is not None else "> "
+
+    def cmd_help(self, rest: str) -> None:
+        """Print the available command set."""
+        always = [
+            ("all_headwords, headwords", "list all headwords"),
+            ("count", "entry and headword counts"),
+            ("exit, quit", "leave the REPL"),
+            ("help", "this list"),
+            (
+                "recall <headword>",
+                "show a dictionary entry (or fill a hole in trace)",
+            ),
+            ("trace <text>", "start a new trace"),
+        ]
+        trace_only = [
+            ("back", "undo the active child, return to its parent"),
+            ("cancel", "abandon the entire trace"),
+            ("expand [pos]", "expand an open hole into a dictionary entry"),
+            ("go to N, goto N", "move active focus to worklist entry N"),
+            ("inject [pos]", "fill an open hole with user-supplied text"),
+            ("state", "show the active demand"),
+            ("up", "move active focus to the parent demand"),
+            ("worklist", "list all open holes across the tree"),
+        ]
+
+        self._print_help_section("always available:", always)
+        self.print_fn("")
+        self._print_help_section("trace-only:", trace_only)
+
+    def _print_help_section(
+        self,
+        title: str,
+        commands: list[tuple[str, str]],
+    ) -> None:
+        self.print_fn(title)
+        for name, description in commands:
+            self.print_fn(f"  {name:<28}{description}")
 
     def cmd_headwords(self, rest: str) -> None:
         """Print all known headwords, one per line."""
@@ -154,12 +203,80 @@ class REPL:
 
         assert self.trace is not None
         active = self.trace.active
+        self.print_fn(f"at: {self._breadcrumb(active)}")
         self.print_fn(active.text())
         if active.open_positions:
             positions = ", ".join(str(p) for p in active.open_positions)
             self.print_fn(f"open positions: {positions}")
         else:
             self.print_fn("open positions: none")
+
+    def cmd_worklist(self, rest: str) -> None:
+        """List open holes across the current tree.
+
+        Indices are recomputed on every call and may change after trace
+        mutations. Use them as one-shot handles for the current worklist.
+        """
+        if not self._require_trace():
+            return
+
+        assert self.trace is not None
+        worklist = self.trace.worklist
+        if not worklist:
+            self.print_fn("no open holes; trace is complete.")
+            return
+
+        for index, (demand, pos) in enumerate(worklist):
+            marker = "*" if demand is self.trace.active else " "
+            tag = self._location_tag(demand)
+            headword = demand.headword_at(pos)
+            self.print_fn(
+                f"{marker} [{index}] {tag:<12} pos {pos}  ->  "
+                f"{{{headword}}}"
+            )
+
+    def cmd_goto(self, rest: str) -> None:
+        """Move active focus to the demand at the current worklist index."""
+        if not self._require_trace():
+            return
+
+        raw = rest.strip()
+        if not raw:
+            self.print_fn("usage: goto N")
+            return
+
+        try:
+            index = int(raw)
+        except ValueError:
+            self.print_fn("invalid index")
+            return
+
+        assert self.trace is not None
+        worklist = self.trace.worklist
+        if not worklist:
+            self.print_fn("no open holes")
+            return
+
+        if index < 0 or index >= len(worklist):
+            self.print_fn(
+                f"index {index} out of range; "
+                f"worklist has {len(worklist)} entries"
+            )
+            return
+
+        demand, _ = worklist[index]
+        self.trace.active = demand
+        self.print_fn(f"moved to {self._location_tag(demand)}.")
+
+    def cmd_go(self, rest: str) -> None:
+        """Alias for the natural-language form: go to N."""
+        raw = rest.strip()
+        word, _, target = raw.partition(" ")
+        if word.lower() != "to" or not target.strip():
+            self.print_fn("usage: go to N")
+            return
+
+        self.cmd_goto(target)
 
     def cmd_expand(self, rest: str) -> None:
         """Expand an active trace hole into a dictionary entry child."""
@@ -319,7 +436,9 @@ class REPL:
 
         self.print_fn(f"multiple entries for '{headword}':")
         for index in idxs:
-            self.print_fn(f"  E{index}: {self.sim.entry_text(index)}")
+            self.print_fn(
+                f"  E{index}: {self._entry_preview(index)}"
+            )
 
         pick = self.input_fn("pick E-number: ")
         try:
@@ -333,6 +452,33 @@ class REPL:
             return None
 
         return chosen
+
+    def _entry_preview(self, index: int) -> str:
+        text = self.sim.entry_text(index)
+        if len(text) <= PICK_PREVIEW_WIDTH:
+            return text
+        width = PICK_PREVIEW_WIDTH - len(PICK_TRUNCATION_MARKER)
+        return text[:width] + PICK_TRUNCATION_MARKER
+
+    def _location_tag(self, demand: Demand) -> str:
+        if demand.parent is None:
+            return "root"
+        if isinstance(demand.provenance, ExpandProvenance):
+            return f"E{demand.provenance.source_index}"
+        if isinstance(demand.provenance, InjectProvenance):
+            return "injected"
+        return "child"
+
+    def _breadcrumb(self, demand: Demand) -> str:
+        tag = self._location_tag(demand)
+        if demand.parent is None:
+            return tag
+
+        for pos, child in demand.parent.children().items():
+            if child is demand:
+                return f"{tag} @ parent pos {pos}"
+
+        return f"{tag} @ parent pos ?"
 
     def _announce_completion(self) -> None:
         if self.trace is not None and self.trace.is_complete:
