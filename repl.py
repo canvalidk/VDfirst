@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from demand import Demand, ExpandProvenance, InjectProvenance, Trace
 from simulator import Simulator
@@ -14,6 +15,15 @@ PICK_TRUNCATION_MARKER = "..."
 # Message convention: action confirmations are lowercase and end with a
 # period. Refusals and status displays are lowercase and do not, unless
 # a command-specific contract says otherwise.
+
+
+@dataclass(frozen=True)
+class RecalledEntry:
+    """Entry selected by the RECALL operation."""
+
+    index: int
+    headword: str
+    text: str
 
 
 class REPL:
@@ -148,34 +158,13 @@ class REPL:
             return
 
         try:
-            idxs = self.sim.entry_indexes(headword)
-            if not idxs:
-                self.print_fn(f"no entry for '{headword}'")
-                return
-
-            if len(idxs) == 1:
-                index = idxs[0]
-                self.print_fn(f"E{index}: {self.sim.entry_text(index)}")
-                return
-
-            self.print_fn(f"multiple entries for '{headword}':")
-            for index in idxs:
-                self.print_fn(f"  E{index}: {self.sim.entry_text(index)}")
-
-            pick = self.input_fn("pick E-number: ")
-            try:
-                chosen = int(pick)
-            except ValueError:
-                self.print_fn("invalid choice; aborted")
-                return
-
-            if chosen not in idxs:
-                self.print_fn("invalid choice; aborted")
-                return
-
-            self.print_fn(f"E{chosen}: {self.sim.entry_text(chosen)}")
+            entry = self._recall_entry(headword, preview_choices=False)
         except IndexError as exc:
             self.print_fn(str(exc))
+            return
+
+        if entry is not None:
+            self.print_fn(f"E{entry.index}: {entry.text}")
 
     def cmd_trace(self, rest: str) -> None:
         """Start a trace from user text."""
@@ -290,19 +279,11 @@ class REPL:
             return
 
         headword = active.headword_at(pos)
-        index = self._pick_entry_index(headword)
-        if index is None:
+        entry = self._recall_entry(headword, preview_choices=True)
+        if entry is None:
             return
 
-        text = self.sim.entry_text(index)
-        child = Demand(
-            self.sim.analyse(text),
-            provenance=ExpandProvenance(index),
-        )
-        active.resolve_expand(pos, child, source_index=index)
-        self.trace.active = child
-        self.print_fn(f"expanded E{index} at position {pos}; now at child.")
-        self._announce_completion()
+        self._expand_active_with_entry(pos, entry)
 
     def _cmd_trace_recall(self, rest: str) -> None:
         """Fill an active trace hole with raw dictionary entry text."""
@@ -313,13 +294,11 @@ class REPL:
             return
 
         headword = active.headword_at(pos)
-        index = self._pick_entry_index(headword)
-        if index is None:
+        entry = self._recall_entry(headword, preview_choices=True)
+        if entry is None:
             return
 
-        active.resolve_recall(pos, self.sim.entry_text(index), index)
-        self.print_fn(f"recalled E{index} at position {pos}.")
-        self._announce_completion()
+        self._recall_active_with_entry(pos, entry)
 
     def cmd_inject(self, rest: str) -> None:
         """Inject user text as a child demand at an active trace hole."""
@@ -337,14 +316,7 @@ class REPL:
             self.print_fn("inject aborted: no text")
             return
 
-        child = Demand(
-            self.sim.analyse(text),
-            provenance=InjectProvenance(text),
-        )
-        active.resolve_inject(pos, child)
-        self.trace.active = child
-        self.print_fn(f"injected at position {pos}; now at child.")
-        self._announce_completion()
+        self._inject_active_with_text(pos, text)
 
     def cmd_up(self, rest: str) -> None:
         """Move active trace focus to its parent demand."""
@@ -425,7 +397,36 @@ class REPL:
 
         return pos
 
-    def _pick_entry_index(self, headword: str) -> int | None:
+    def _recall_entry(
+        self,
+        headword: str,
+        *,
+        preview_choices: bool,
+    ) -> RecalledEntry | None:
+        """Resolve a headword to selected entry text.
+
+        This is the RECALL operation: it composes dictionary lookup with
+        optional user choice, but does not analyse text or mutate trace state.
+        """
+        index = self._pick_entry_index(
+            headword,
+            preview_choices=preview_choices,
+        )
+        if index is None:
+            return None
+
+        return RecalledEntry(
+            index=index,
+            headword=self.sim.entry_headword(index),
+            text=self.sim.entry_text(index),
+        )
+
+    def _pick_entry_index(
+        self,
+        headword: str,
+        *,
+        preview_choices: bool,
+    ) -> int | None:
         idxs = self.sim.entry_indexes(headword)
         if not idxs:
             self.print_fn(f"no entry for '{headword}'")
@@ -436,9 +437,11 @@ class REPL:
 
         self.print_fn(f"multiple entries for '{headword}':")
         for index in idxs:
-            self.print_fn(
-                f"  E{index}: {self._entry_preview(index)}"
+            choice_text = self._entry_choice_text(
+                index,
+                preview_choices,
             )
+            self.print_fn(f"  E{index}: {choice_text}")
 
         pick = self.input_fn("pick E-number: ")
         try:
@@ -453,12 +456,58 @@ class REPL:
 
         return chosen
 
+    def _entry_choice_text(self, index: int, preview: bool) -> str:
+        if preview:
+            return self._entry_preview(index)
+        return self.sim.entry_text(index)
+
     def _entry_preview(self, index: int) -> str:
         text = self.sim.entry_text(index)
         if len(text) <= PICK_PREVIEW_WIDTH:
             return text
         width = PICK_PREVIEW_WIDTH - len(PICK_TRUNCATION_MARKER)
         return text[:width] + PICK_TRUNCATION_MARKER
+
+    def _expand_active_with_entry(
+        self,
+        pos: int,
+        entry: RecalledEntry,
+    ) -> None:
+        assert self.trace is not None
+        active = self.trace.active
+        child = Demand(
+            self.sim.analyse(entry.text),
+            provenance=ExpandProvenance(entry.index),
+        )
+        active.resolve_expand(pos, child, source_index=entry.index)
+        self.trace.active = child
+        self.print_fn(
+            f"expanded E{entry.index} at position {pos}; now at child."
+        )
+        self._announce_completion()
+
+    def _recall_active_with_entry(
+        self,
+        pos: int,
+        entry: RecalledEntry,
+    ) -> None:
+        assert self.trace is not None
+        active = self.trace.active
+        active.resolve_recall(pos, entry.text, entry.index)
+        self.print_fn(f"recalled E{entry.index} at position {pos}.")
+        self._announce_completion()
+
+    def _inject_active_with_text(self, pos: int, text: str) -> None:
+        assert self.trace is not None
+        active = self.trace.active
+        child = Demand(
+            self.sim.analyse(text),
+            provenance=InjectProvenance(text),
+        )
+        active.resolve_inject(pos, child)
+        self.trace.active = child
+        self.print_fn(f"injected at position {pos}; now at child.")
+        self._announce_completion()
 
     def _location_tag(self, demand: Demand) -> str:
         if demand.parent is None:
