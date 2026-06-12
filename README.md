@@ -11,7 +11,9 @@ Code-only repository for the Valid Dictionary (VD) engine.
 - Trace demand state: `demand.py`
 - Newton case study: `newton.py`
 - Display/visualisation helpers: `display.py`, `viz.py`, `vd_demo.py`
+- Project documentation: `docs/`
 - Specs archive: `specs/`
+- Codex project context shelf: `codex_context/`
 - Tests: `test_*.py`
 
 ## Setup
@@ -28,8 +30,8 @@ python run_repl.py
 
 Type `help` in the REPL for the command list. Core commands include
 `count`, `headwords`, `recall <headword>`, and `trace <text>`. In trace
-mode use `expand`, `recall`, `inject`, `worklist`, `goto N` / `go to N`,
-`state`, `up`, `back`, and `cancel`.
+mode use `expand`, `recall`, `inject`, `flatten`, `return`, `events`,
+`worklist`, `goto N` / `go to N`, `state`, `up`, `back`, and `cancel`.
 
 ## Tests
 
@@ -37,4 +39,4 @@ mode use `expand`, `recall`, `inject`, `worklist`, `goto N` / `go to N`,
 pytest test_*.py
 ```
 
-Expected baseline: 220 passing tests.
+Expected baseline: 244 passing tests.

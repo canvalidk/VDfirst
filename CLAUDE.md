@@ -36,10 +36,33 @@ as the implementation/test surface.
   `Simulator` inspection primitives, demand graph state, trace
   bootstrap, and REPL trace commands are implemented.
 - The REPL exposes `help`, `headwords`, `count`, `recall`, `trace`,
-  `expand`, `inject`, `worklist`, `goto` / `go to`, `state`, `up`,
-  `back`, and `cancel`.
+  `expand`, `inject`, `flatten`, `return`, `onward`, `events`,
+  `worklist`, `goto` / `go to`, `state`, `up`, `cancel`, `reduce`,
+  `unreduce`, `fold`, `tidy`, and `set` (reduce/cleanup policies).
+  `back` was removed per ADR 5 (no severing).
 - `run_repl.py` is the Newton simulator entry point.
-- Expected test result: 220 passing tests.
+- Cycle information is implemented: `Demand.ancestor_cycle`, worklist
+  cycle suffixes, and the expand revisit warning (exact-string headword
+  match, per Token Prop 3).
+- Reduction is implemented end to end: the `reduced` overlay on
+  `Demand` (short-circuit in both render pathways, `unresolve`
+  clearing up the ancestor chain) plus the REPL surface — `reduce`,
+  `unreduce`, `fold` (post-order sweep), `set reduce <on_settle|off>`,
+  and prompt-only on-settle offers (EOF/empty skips; printed output
+  unchanged unless an offer is accepted). Decision record: reduction
+  spec §13.
+- Residual cleanup is implemented end to end: `set_latents` /
+  `clean_recall_text` on `Demand` (gap-wise latent edits, headwords
+  never in the input), the `tidy` sweep (scopes active | subtree |
+  all), prompt-only cleanup offers per `set cleanup
+  <on_settled_only|on_every_resolution|off>`, reduce-before-clean
+  choreography with masking. Decision record: cleanup spec §11.
+- Degree-0 return is implemented: parked gates (focus stays at the
+  deepest newly settled frame), `reduce` pops one frame on success,
+  `onward` routes to the deepest unresolved ancestor, and
+  `Demand.degree` counts open holes in a subtree. `back` is removed;
+  committed trace structure is never destroyed (ADR 5, no severing).
+- Expected test result: 313 passing tests.
 - Next likely work: Design 2.1 interaction integration, richer trace
   presentation such as `tree` or `show <headword>`, and any automated
   compression-on-resolve UX if it is still wanted.
@@ -93,8 +116,9 @@ triplets.
 2. Input loop + REPL: done for inspection commands.
 3. Demand graph + trace state: done in `demand.py`.
 4. In-trace commands: `EXPAND`, `RECALL`, `INJECT`, navigation,
-   worklist/state display, and `goto` are done. A named `SKIP` verb is
-   not implemented; `goto` covers the user-level workflow for now.
+   worklist/state display, `goto`, `FLATTEN`, manual `return`, and event
+   display are done. A named `SKIP` verb is not implemented; `goto` covers
+   the user-level workflow for now.
 
 Deferred design questions:
 
