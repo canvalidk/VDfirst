@@ -8,9 +8,11 @@ from demand import (
     ExpandResolution,
     InjectProvenance,
     InjectResolution,
+    LiteralResolution,
     RecallResolution,
     RootProvenance,
     Trace,
+    TraceEvent,
 )
 from definiens import Definiens
 from engine import VDInstance
@@ -169,6 +171,34 @@ class TestInjectResolution:
         assert parent.text() == "assume string"
 
 
+class TestLiteralResolution:
+
+    def test_literal_resolution_closes_position_and_renders_text(self):
+        d = demand(["", " times ", ""], ["mass", "acceleration"])
+        d.resolve_literal(0, "mass", inert=True, source="flatten")
+
+        assert d.open_positions == [1]
+        assert d.text() == "mass times {acceleration}"
+        assert d.resolutions[0] == LiteralResolution(
+            text="mass",
+            inert=True,
+            source="flatten",
+        )
+
+    def test_inert_literal_escapes_for_reanalysis(self):
+        d = demand(["", " times ", ""], ["mass", "acceleration"])
+        d.resolve_literal(0, "mass", inert=True, source="flatten")
+        d.resolve_literal(
+            1,
+            "acceleration",
+            inert=True,
+            source="flatten",
+        )
+
+        assert d.text() == "mass times acceleration"
+        assert d.escaped_text() == "`mass` times `acceleration`"
+
+
 class TestUnresolveAndCompression:
 
     def test_unresolve_reopens_recall_position(self):
@@ -237,6 +267,218 @@ class TestMixedRendering:
         assert d.text() == "A raw-x B {y} C child"
 
 
+class TestAncestorCycle:
+
+    def test_ancestor_cycle_none_when_unique(self):
+        parent = demand(["", ""], ["force"])
+        child = demand(["", ""], ["mass"])
+        parent.resolve_expand(0, child, source_index=1)
+        assert child.ancestor_cycle(0) is None
+
+    def test_ancestor_cycle_finds_open_ancestor(self):
+        parent = demand(["", " plus ", ""], ["force", "force"])
+        child = demand(["", ""], ["force"])
+        parent.resolve_expand(0, child, source_index=1)
+        assert child.ancestor_cycle(0) is parent
+
+    def test_ancestor_cycle_skips_resolved_ancestor(self):
+        parent = demand(["", " then ", ""], ["force", "mass"])
+        child = demand(["", ""], ["force"])
+        parent.resolve_expand(0, child, source_index=1)
+        assert child.ancestor_cycle(0) is None
+
+    def test_ancestor_cycle_returns_nearest(self):
+        grand = demand(["", " A ", ""], ["mass", "force"])
+        mid = demand(["", " B ", ""], ["mass", "force"])
+        leaf = demand(["", ""], ["force"])
+        grand.resolve_expand(0, mid, source_index=1)
+        mid.resolve_expand(0, leaf, source_index=2)
+        assert leaf.ancestor_cycle(0) is mid
+
+    def test_ancestor_cycle_ignores_siblings(self):
+        root = demand(["", " and ", ""], ["force", "force"])
+        left = demand(["", ""], ["force"])
+        right = demand(["", ""], ["force"])
+        root.resolve_expand(0, left, source_index=1)
+        root.resolve_expand(1, right, source_index=2)
+        assert right.ancestor_cycle(0) is None
+
+    def test_ancestor_cycle_bad_position_raises(self):
+        d = demand(["", ""], ["mass"])
+        with pytest.raises(ValueError, match="out of range"):
+            d.ancestor_cycle(1)
+
+
+class TestReduction:
+
+    def test_set_reduction_overrides_text(self):
+        d = demand(["", " * ", ""], ["mass", "mass"])
+        d.resolve_recall(0, "5", source_index=1)
+        d.resolve_recall(1, "3", source_index=1)
+        d.set_reduction("15")
+        assert d.text() == "15"
+
+    def test_set_reduction_rejects_open_hole(self):
+        d = demand(["", " * ", ""], ["mass", "mass"])
+        d.resolve_recall(0, "5", source_index=1)
+        with pytest.raises(ValueError, match="not fully resolved"):
+            d.set_reduction("15")
+
+    def test_set_reduction_rejects_open_descendant(self):
+        parent = demand(["", ""], ["force"])
+        child = demand(["", ""], ["mass"])
+        parent.resolve_expand(0, child, source_index=1)
+        with pytest.raises(ValueError, match="not fully resolved"):
+            parent.set_reduction("done")
+
+    def test_reduced_propagates_to_parent_render(self):
+        parent = demand(["F = ", ""], ["force"])
+        child = demand(["5 * 3"], [])
+        parent.resolve_expand(0, child, source_index=1)
+        child.set_reduction("15")
+        assert parent.text() == "F = 15"
+
+    def test_compression_masks_child_reduction(self):
+        parent = demand(["F = ", ""], ["force"])
+        child = demand(["5 * 3"], [])
+        parent.resolve_expand(0, child, source_index=1, compressed=True)
+        child.set_reduction("15")
+        assert parent.text() == "F = force"
+
+    def test_clear_reduction_restores_full_render(self):
+        d = demand(["", " * ", ""], ["mass", "mass"])
+        d.resolve_recall(0, "5", source_index=1)
+        d.resolve_recall(1, "3", source_index=1)
+        d.set_reduction("15")
+        d.clear_reduction()
+        assert d.text() == "5 * 3"
+
+    def test_unresolve_clears_reduction_up_chain(self):
+        root = demand(["", ""], ["force"])
+        mid = demand(["", ""], ["mass"])
+        leaf = demand(["3 kg"], [])
+        root.resolve_expand(0, mid, source_index=1)
+        mid.resolve_expand(0, leaf, source_index=2)
+        leaf.set_reduction("3000 g")
+        mid.set_reduction("3 kg exactly")
+        root.set_reduction("done")
+
+        mid.unresolve(0)
+
+        assert mid.reduced is None
+        assert root.reduced is None
+        assert leaf.reduced == "3000 g"
+        assert leaf.parent is None
+
+    def test_reduction_does_not_affect_is_resolved(self):
+        d = demand(["", ""], ["mass"])
+        d.resolve_recall(0, "3 kg", source_index=1)
+        assert d.is_resolved
+        d.set_reduction("3 kg")
+        assert d.is_resolved
+        d.clear_reduction()
+        assert d.is_resolved
+
+    def test_reduction_does_not_affect_worklist(self):
+        root = demand(["", " and ", ""], ["force", "mass"])
+        child = demand(["done"], [])
+        root.resolve_expand(0, child, source_index=1)
+        trace = Trace(root=root, active=root)
+        child.set_reduction("finished")
+        assert trace.worklist == [(root, 1)]
+
+    def test_escaped_text_honours_reduction(self):
+        parent = demand(["F = ", ""], ["force"])
+        child = demand(["", " * ", ""], ["mass", "mass"])
+        parent.resolve_expand(0, child, source_index=1)
+        child.resolve_literal(0, "5", inert=True, source="flatten")
+        child.resolve_literal(1, "3", inert=True, source="flatten")
+        child.set_reduction("15")
+
+        assert parent.text() == "F = 15"
+        assert parent.escaped_text() == "F = 15"
+        child.clear_reduction()
+        assert parent.escaped_text() == "F = `5` * `3`"
+
+
+class TestCleanup:
+
+    def test_set_latents_rewrites_render(self):
+        d = demand(["", " times ", ""], ["mass", "acceleration"])
+        d.set_latents(["", " multiplied by ", ""])
+        assert d.text() == "{mass} multiplied by {acceleration}"
+
+    def test_set_latents_arity_mismatch_raises(self):
+        d = demand(["", " times ", ""], ["mass", "acceleration"])
+        with pytest.raises(ValueError, match="expected 3 latents"):
+            d.set_latents(["", ""])
+
+    def test_set_latents_preserves_headwords_and_resolutions(self):
+        d = demand(["", " times ", ""], ["mass", "acceleration"])
+        d.resolve_recall(0, "2 kg", source_index=0)
+        d.set_latents(["the ", " by ", " value"])
+        assert d.definiens.headwords == ["mass", "acceleration"]
+        assert d.open_positions == [1]
+        assert d.text() == "the 2 kg by {acceleration} value"
+
+    def test_set_latents_marks_cleaned(self):
+        d = demand(["done"], [])
+        assert not d.cleaned
+        d.set_latents(["all done"])
+        assert d.cleaned
+
+    def test_clean_recall_text_rewrites_render(self):
+        d = demand(["force is ", ""], ["net-force"])
+        d.resolve_recall(0, "mass times acceleration", source_index=7)
+        d.clean_recall_text(0, "the product of mass and acceleration")
+        assert d.text() == (
+            "force is the product of mass and acceleration"
+        )
+        assert d.resolutions[0].source_index == 7
+
+    def test_clean_recall_text_marks_position_cleaned(self):
+        d = demand(["", ""], ["mass"])
+        d.resolve_recall(0, "3 kg", source_index=2)
+        d.clean_recall_text(0, "three kilograms")
+        assert d.cleaned_recalls == {0}
+
+    def test_clean_recall_text_rejects_non_recall(self):
+        d = demand(["", ""], ["force"])
+        child = demand(["done"], [])
+        d.resolve_expand(0, child, source_index=3)
+        with pytest.raises(ValueError, match="not a recall"):
+            d.clean_recall_text(0, "x")
+
+    def test_clean_recall_text_open_position_raises_key_error(self):
+        d = demand(["", ""], ["mass"])
+        with pytest.raises(KeyError):
+            d.clean_recall_text(0, "x")
+
+
+class TestDegree:
+
+    def test_degree_counts_open_holes_in_subtree(self):
+        root = demand(["", " and ", ""], ["force", "mass"])
+        child = demand(["", " times ", ""], ["mass", "acceleration"])
+        root.resolve_expand(0, child, source_index=1)
+        assert root.degree == 3
+        assert child.degree == 2
+
+    def test_degree_zero_iff_resolved(self):
+        d = demand(["", ""], ["mass"])
+        assert d.degree == 1
+        assert not d.is_resolved
+        d.resolve_recall(0, "3 kg", source_index=1)
+        assert d.degree == 0
+        assert d.is_resolved
+
+    def test_degree_ignores_reduction_overlays(self):
+        d = demand(["", ""], ["mass"])
+        d.resolve_recall(0, "3 kg", source_index=1)
+        d.set_reduction("3 kg")
+        assert d.degree == 0
+
+
 class TestTrace:
 
     def test_start_bootstraps_root_from_simulator(self):
@@ -252,6 +494,9 @@ class TestTrace:
         assert trace.root.definiens.headwords == ["force"]
         assert trace.worklist == [(trace.root, 0)]
         assert not trace.is_complete
+        assert trace.events == [
+            TraceEvent("trace", "started from 'find force'")
+        ]
 
     def test_start_with_order_zero_text_is_complete(self):
         v = VDInstance("empty")
@@ -309,6 +554,33 @@ class TestTrace:
         assert not trace.is_complete
         root.resolve_recall(0, "3 kg", source_index=1)
         assert trace.is_complete
+
+    def test_flatten_active_resolves_all_open_positions(self):
+        root = demand(["", " times ", ""], ["mass", "acceleration"])
+        trace = Trace(root=root, active=root)
+
+        positions = trace.flatten_active()
+
+        assert positions == [0, 1]
+        assert trace.active is root
+        assert root.open_positions == []
+        assert root.text() == "mass times acceleration"
+        assert root.escaped_text() == "`mass` times `acceleration`"
+        assert trace.is_complete
+        assert trace.events == [
+            TraceEvent("flatten", "active positions 0, 1")
+        ]
+
+    def test_flatten_active_position_resolves_one_position(self):
+        root = demand(["", " times ", ""], ["mass", "acceleration"])
+        trace = Trace(root=root, active=root)
+
+        assert trace.flatten_active_position(1) == [1]
+        assert root.open_positions == [0]
+        assert root.text() == "{mass} times acceleration"
+        assert trace.events == [
+            TraceEvent("flatten", "active position 1")
+        ]
 
     def test_cancel_style_unresolve_reopens_parent_and_orphans_child(self):
         root = demand(["", ""], ["force"])
