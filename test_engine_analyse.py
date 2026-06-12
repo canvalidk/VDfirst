@@ -127,6 +127,32 @@ class TestTokeniserAnalyseSelfReference:
 
 # ── Tokeniser.analyse: original headword names preserved ───────────
 
+class TestTokeniserAnalyseEscapes:
+    """Backticks mark literal text that should not become headword holes."""
+
+    def test_escaped_headword_is_literal_latent_text(self):
+        tok = Tokeniser()
+        d = tok.analyse("`mass` times force", {"mass", "force"})
+        assert d.order == 1
+        assert d.headwords == ["force"]
+        assert d.render() == "mass times {force}"
+
+    def test_fully_escaped_headword_gives_order_zero(self):
+        tok = Tokeniser()
+        d = tok.analyse("`mass`", {"mass"})
+        assert d.order == 0
+        assert d.text == "mass"
+
+    def test_tokenise_definition_ignores_escaped_headword(self):
+        tok = Tokeniser()
+        _, hw_tokens, residue = tok.tokenise_definition(
+            "`mass` and force",
+            {"mass", "force"},
+        )
+        assert hw_tokens == {"force"}
+        assert "mass" not in residue
+
+
 class TestTokeniserAnalyseHeadwordNames:
     """The headwords list holds the un-normalised dictionary headword name,
     not the normalised matching form."""

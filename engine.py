@@ -84,6 +84,9 @@ class Tokeniser:
       2. Delimiter discipline — explicit set of boundary characters
       3. Escaping mechanism — (placeholder: backtick escaping, not yet enforced)
 
+    Current implementation note: backtick spans are treated as escaped
+    literal text, despite older wording above calling this a placeholder.
+
     Strategy:
       - Normalise both headwords and definitions to a canonical form
       - Match longest headword first, but ONLY at valid delimiter boundaries
@@ -141,6 +144,36 @@ class Tokeniser:
 
         return text
 
+    @staticmethod
+    def _unescape_with_mask(text: str) -> tuple[str, list[bool]]:
+        """Remove backtick escape markers and mark escaped characters.
+
+        Escaped spans are literal text: they survive in the returned string
+        but are hidden from headword matching. A dangling opening backtick
+        escapes through end-of-string; this keeps the rule simple for the
+        simulator.
+        """
+
+        plain: list[str] = []
+        mask: list[bool] = []
+        in_escape = False
+        for ch in text:
+            if ch == "`":
+                in_escape = not in_escape
+                continue
+            plain.append(ch)
+            mask.append(in_escape)
+        return "".join(plain), mask
+
+    @staticmethod
+    def _mask_escaped(text: str, mask: list[bool]) -> str:
+        """Blank escaped characters while preserving string positions."""
+
+        return "".join(
+            "\x00" if escaped else ch
+            for ch, escaped in zip(text, mask)
+        )
+
     def _is_boundary(self, text: str, pos: int) -> bool:
         """Check if position is a valid boundary (start/end of text or delimiter)."""
         if pos < 0 or pos >= len(text):
@@ -195,8 +228,10 @@ class Tokeniser:
 
         Returns (all_tokens, hw_tokens, residue_tokens).
         """
-        text = self.normalise(definition)
-        working = text  # mutable copy for blanking
+        text, escaped_mask = self._unescape_with_mask(
+            self.normalise(definition)
+        )
+        working = self._mask_escaped(text, escaped_mask)
 
         # Build normalised headword lookup
         hw_norm_map: dict[str, str] = {}  # normalised → original
@@ -275,7 +310,9 @@ class Tokeniser:
         Does not write to `_log`. The simulator's audit needs differ from
         the existing log shape; if needed, log there separately.
         """
-        text = self.normalise(definition)
+        text, escaped_mask = self._unescape_with_mask(
+            self.normalise(definition)
+        )
 
         # Normalised → original headword lookup (parallels tokenise_definition)
         hw_norm_map: dict[str, str] = {self.normalise(hw): hw for hw in headword_set}
@@ -285,7 +322,7 @@ class Tokeniser:
         # Positions returned by the helper index into the input string given
         # to it; since blanking preserves length, positions remain valid
         # references into the original normalised `text`.
-        working = text
+        working = self._mask_escaped(text, escaped_mask)
         matches: list[tuple[int, int, str]] = []
         for hw_norm in sorted_norms:
             for start, end in self._find_headword_at_boundary(hw_norm, working):
