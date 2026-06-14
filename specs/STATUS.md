@@ -34,6 +34,7 @@ This file tracks which specs are active, historical, or only exploratory.
 
 ## Next Likely Spec Segments
 
-- Automatic degree-0 return/unwind semantics.
 - Richer audit records.
 - Typed human-input commands.
+- Richer trace presentation such as `tree` or `show <headword>`.
+- Newton proof-trace integration once a representative problem is chosen.

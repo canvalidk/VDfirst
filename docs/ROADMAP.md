@@ -15,14 +15,15 @@ inspectable, testable, and honest about what the code can currently do.
 
 ## Current Phase
 
-Phase 0: documentation scaffolding and role cleanup.
+Phase 1: simulator trace proof-of-concept hardening.
 
 Goals:
 
 - keep spec status clear;
 - keep broad design separate from small implementation segments;
-- clean the roles of `ANALYSE`, `RECALL`, `EXPAND`, and `INJECT`;
-- establish trace-level `FLATTEN`, first event history, and manual return;
+- keep the REPL aligned with committed trace semantics;
+- preserve the no-severing rule for committed trace structure;
+- make backward-pass actions auditable enough for research use;
 - avoid baking unstable Theory/Newton assumptions into code too early.
 
 Active spec:
@@ -33,6 +34,10 @@ Recently implemented:
 
 - `../specs/2026-05-28-simulator-role-cleanup-segment-1.md`
 - `../specs/2026-05-28-trace-flatten-events-segment.md`
+- `../specs/2026-06-10-vd-cycle-info.md`
+- `../specs/2026-06-10-vd-reduction.md`
+- `../specs/2026-06-10-vd-residual-cleanup.md`
+- `../specs/2026-06-11-vd-degree0-return.md`
 
 North-star draft:
 
@@ -40,28 +45,20 @@ North-star draft:
 
 ## Planned Segments
 
-1. Role cleanup segment 1.
-   Clarify command/function responsibilities while preserving behaviour.
-
-2. Trace-level `FLATTEN`.
-   Add a trace operation that turns open active-node headwords into inert
-   literals. Initial version implemented with backtick escapes.
-
-3. Degree-0 return.
-   Add evaluator-stack behaviour so completed child demands work back up to
-   the parent. Manual `return` is implemented; automatic unwind is deferred.
-
-4. Event history.
-   Record evaluator actions such as trace start, expand, recall, inject,
-   flatten, return, and completion. Initial trace/expand/recall/inject/flatten
-   and return version implemented.
-
-5. Human-input audit.
+1. Human-input audit.
    Add typed human inputs and demanded-by attribution.
 
-6. Newton proof trace.
+2. Rich trace presentation.
+   Add commands such as `tree` or `show <headword>` if they become useful
+   for reading settled traces.
+
+3. Newton proof trace.
    Use improved Newton entries to generate a convincing trace for one selected
    mechanics problem.
+
+4. Compression-on-resolve.
+   Decide whether automatic compression belongs in Design 2.1, or whether the
+   current explicit reduction/cleanup flow is the right boundary.
 
 ## Later Product Direction
 

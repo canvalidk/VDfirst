@@ -37,26 +37,32 @@ The trace can:
 - expand a hole into a child demand using a dictionary entry;
 - recall a dictionary entry as literal text;
 - inject user text as a child demand;
+- flatten open holes into inert literal text;
+- record trace events;
+- surface ancestor-cycle information without blocking expansion;
+- reduce settled demand nodes with a render overlay;
+- clean settled residual prose without changing headword structure;
 - render the active demand;
 - list open holes across the tree;
-- navigate with `up`, `back`, `goto`, and `go to`.
+- navigate with `up`, `return`, `onward`, `goto`, and `go to`.
 
-The trace currently builds and renders a tree. It does not yet fully behave
-like an evaluator stack.
+Committed trace structure is append-only at the REPL surface. `back` was
+removed under ADR 5; mistake recovery is `cancel` and restart, not severing a
+committed child.
 
 ## Important Gap
 
-When a child demand has order 0, the data model can render it recursively, but
-the REPL does not automatically work its way back up the tree and continue the
-parent evaluation. Adding this return/unwind behaviour is a likely simulator
-milestone.
+Degree-0 return is implemented as parked gates rather than silent unwind:
+focus stays at the deepest settled frame, `reduce` ratifies and pops one
+frame, and `onward` leaves settled frames for the deepest open ancestor.
+Future work is richer trace presentation and typed human-input audit records,
+not automatic severing or silent multi-frame return.
 
 ## Test Contract
 
 The tests are the current implementation contract. `CLAUDE.md` says the
-expected baseline is 220 passing tests via:
+expected baseline is 313 passing tests via:
 
 ```powershell
 pytest test_*.py
 ```
-

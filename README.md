@@ -31,7 +31,8 @@ python run_repl.py
 Type `help` in the REPL for the command list. Core commands include
 `count`, `headwords`, `recall <headword>`, and `trace <text>`. In trace
 mode use `expand`, `recall`, `inject`, `flatten`, `return`, `events`,
-`worklist`, `goto N` / `go to N`, `state`, `up`, `back`, and `cancel`.
+`worklist`, `goto N` / `go to N`, `state`, `up`, `onward`, `reduce`,
+`unreduce`, `fold`, `tidy`, `set`, and `cancel`.
 
 ## Tests
 
@@ -39,4 +40,4 @@ mode use `expand`, `recall`, `inject`, `flatten`, `return`, `events`,
 pytest test_*.py
 ```
 
-Expected baseline: 244 passing tests.
+Expected baseline: 313 passing tests.

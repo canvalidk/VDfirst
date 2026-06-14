@@ -21,6 +21,7 @@ The simulator should eventually demonstrate:
 - entry-driven expansion of definitions;
 - lazy demand propagation;
 - degree-0 return behaviour up the demand tree;
+- backwards-pass reduction and residual cleanup;
 - typed human inputs generated only when demanded;
 - audit records for human inputs;
 - Newton entries improving until the trace can solve representative Newton
@@ -32,13 +33,16 @@ The existing implementation has useful bones:
 
 - `engine.py` builds the dictionary, tokenises definitions, and analyses text.
 - `residual.py` and `definiens.py` represent text with headword holes.
-- `demand.py` stores the trace tree and per-position resolutions.
+- `demand.py` stores the trace tree, per-position resolutions, event records,
+  cycle reads, reduction overlays, cleanup state, and degree counts.
 - `simulator.py` is a read-only oracle over a VD instance.
-- `repl.py` exposes inspection and trace commands.
+- `repl.py` exposes inspection, trace, reduction, cleanup, and navigation
+  commands.
 - `newton.py` is the current Newton case study.
 
-The likely next design step is not a polished UI. It is adding evaluation
-stack semantics and audit-worthy human input records to the simulator.
+The likely next design step is not a polished UI. It is adding typed,
+audit-worthy human input records and using Newton traces to test whether the
+current evaluator surface is expressive enough.
 
 ## Long-Term Product Possibility
 
@@ -46,4 +50,3 @@ The future LLM-facing tool should let an LLM operate the VD machinery rather
 than merely ask it for answers. The engine should hold the demand structure,
 entry provenance, trace state, and assumption ledger; the LLM can supply
 interpretive and modelling judgments at explicit handoff points.
-

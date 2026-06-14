@@ -116,15 +116,15 @@ triplets.
 2. Input loop + REPL: done for inspection commands.
 3. Demand graph + trace state: done in `demand.py`.
 4. In-trace commands: `EXPAND`, `RECALL`, `INJECT`, navigation,
-   worklist/state display, `goto`, `FLATTEN`, manual `return`, and event
-   display are done. A named `SKIP` verb is not implemented; `goto` covers
-   the user-level workflow for now.
+   worklist/state display, `goto`, `FLATTEN`, manual `return`, `onward`,
+   event display, reduction, cleanup, and policy toggles are done.
 
 Deferred design questions:
 
 - Whether automatic compression-on-resolve belongs in Design 2.1.
 - Whether a full `tree` command should display the demand graph.
 - How much provenance should appear inline in `state`.
+- What the stable taxonomy and fields for typed human-input audit records are.
 - Whether trace save/restore or multi-trace sessions are needed.
 
 ## Working Pattern
