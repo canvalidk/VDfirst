@@ -5,9 +5,12 @@ Entries from VD_Newton_v0_4.pdf Design 2 (E1..E45), rewritten with
 tokeniser-compatible headword conventions:
 
   - Hyphen glues compound names: `point-particle`, `inertial-frame`
-  - Underscore attaches qualifiers: `canonical-force_acting-object`
+  - Underscore introduces positional parameters and arguments
+  - `canonical-force_acting-object` declares `canonical-force` with the
+    formal parameter `acting-object`
   - Pipe marks plurals: `acting-force|s` matches headword `acting-force`
-  - Arguments dropped from headwords: `net force(p,t)` → `net-force`
+  - Legacy parenthetical arguments remain absent: `net force(p,t)` →
+    `net-force`; new parameterized entries use underscore signatures
   - References are opt-in: hyphenated = reference, spaced = prose
 
 Section tags are carried as metadata for display, not as VD-core data.
@@ -46,7 +49,7 @@ SECTIONS = {
 #
 # Tokeniser conventions:
 #   `-`  inside a headword glues words into one atomic token
-#   `_`  attaches a qualifier (subscript)
+#   `_`  separates positional formal parameters / supplied arguments
 #   `|`  in definitions is a delimiter — write `headword|s` for plural
 #   Unhyphenated multi-word phrases are NOT headword references
 #

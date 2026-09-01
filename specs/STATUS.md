@@ -15,6 +15,7 @@ This file tracks which specs are active, historical, or only exploratory.
 | Spec | Status | Role |
 |---|---|---|
 | `2026-05-28-lazy-vd-language-draft.md` | Draft | North-star design for lazy evaluator/programming-language behaviour. |
+| `2026-09-01-vd-parameterized-headwords.md` | Implemented prototype | Underscore calls and flat partial instantiation; replaceable arity/binding band-aids recorded explicitly. |
 
 ## Implemented Historical Specs
 
@@ -34,6 +35,7 @@ This file tracks which specs are active, historical, or only exploratory.
 
 ## Next Likely Spec Segments
 
+- Revisit parameterized-headword overloading/binding after representative use.
 - Richer audit records.
 - Typed human-input commands.
 - Richer trace presentation such as `tree` or `show <headword>`.

@@ -93,17 +93,29 @@ class Simulator:
     # ── Lookup by headword ──────────────────────────────────────────
 
     def entry_indexes(self, headword: str) -> list[int]:
-        """E-numbers of all entries with this headword, in dictionary
-        order.
+        """E-numbers applicable to a headword or headword call.
 
-        Returns [] if the headword is not in the dictionary. No
-        distinction between absent and empty since a headword cannot
-        exist without at least one entry.
+        Exact authored-headword lookup remains the fast path.  Otherwise,
+        a bare, partial, or complete call resolves through the signature's
+        stem.  Returns [] if no signature exists.  Results remain in
+        dictionary order.
         """
-        return [
+        if not headword:
+            return []
+
+        exact = [
             e.index for e in self.instance.entries
             if e.headword == headword
         ]
+        if exact:
+            return exact
+        return [e.index for e in self.instance.entry_by_call(headword)]
+
+    def instantiated_entry_text(self, index: int, call: str) -> str:
+        """Selected entry text after flat instantiation for ``call``."""
+
+        self._check_index(index)
+        return self.instance.instantiate_entry(index, call)
 
     # ── Tokenisation pass-through ───────────────────────────────────
 

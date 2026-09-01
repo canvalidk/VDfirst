@@ -13,6 +13,11 @@ for implementation.
 append-only. Downstream graph construction, tokenisation, law/house detection,
 and analysis are computed from that log.
 
+`HeadwordSignature`, `HeadwordCall`, and `instantiate_definition` in
+`application.py` isolate the current parameterized-headword prototype.
+Underscore calls are parsed structurally and supplied actuals are substituted
+simultaneously before the resulting residual is tokenized.
+
 `Residual` in `residual.py` stores literal text segments with positional holes.
 It does not know about headwords.
 
@@ -34,6 +39,8 @@ trace state and mutates the `Trace`.
 The trace can:
 
 - start from arbitrary text;
+- recognize bare, partial, and complete calls of parameterized headwords;
+- instantiate supplied arguments without interpreting their values;
 - expand a hole into a child demand using a dictionary entry;
 - recall a dictionary entry as literal text;
 - inject user text as a child demand;
@@ -61,7 +68,7 @@ not automatic severing or silent multi-frame return.
 ## Test Contract
 
 The tests are the current implementation contract. `CLAUDE.md` says the
-expected baseline is 313 passing tests via:
+expected baseline is 364 passing tests via:
 
 ```powershell
 pytest test_*.py

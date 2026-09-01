@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from application import HeadwordApplicationError, HeadwordArityError
 from demand import (
     Demand,
     ExpandProvenance,
@@ -105,7 +106,12 @@ class REPL:
             self.print_fn(f"unknown command: {cmd}")
             return True
 
-        handler(rest)
+        try:
+            handler(rest)
+        except HeadwordArityError as exc:
+            self.print_fn(f"arity error: {exc}")
+        except HeadwordApplicationError as exc:
+            self.print_fn(f"headword error: {exc}")
         return True
 
     def _prompt(self) -> str:
@@ -924,8 +930,8 @@ class REPL:
 
         return RecalledEntry(
             index=index,
-            headword=self.sim.entry_headword(index),
-            text=self.sim.entry_text(index),
+            headword=headword,
+            text=self.sim.instantiated_entry_text(index, headword),
         )
 
     def _pick_entry_index(
@@ -947,6 +953,7 @@ class REPL:
             choice_text = self._entry_choice_text(
                 index,
                 preview_choices,
+                headword,
             )
             self.print_fn(f"  E{index}: {choice_text}")
 
@@ -963,13 +970,18 @@ class REPL:
 
         return chosen
 
-    def _entry_choice_text(self, index: int, preview: bool) -> str:
+    def _entry_choice_text(
+        self,
+        index: int,
+        preview: bool,
+        headword: str,
+    ) -> str:
+        text = self.sim.instantiated_entry_text(index, headword)
         if preview:
-            return self._entry_preview(index)
-        return self.sim.entry_text(index)
+            return self._entry_preview(text)
+        return text
 
-    def _entry_preview(self, index: int) -> str:
-        text = self.sim.entry_text(index)
+    def _entry_preview(self, text: str) -> str:
         if len(text) <= PICK_PREVIEW_WIDTH:
             return text
         width = PICK_PREVIEW_WIDTH - len(PICK_TRUNCATION_MARKER)

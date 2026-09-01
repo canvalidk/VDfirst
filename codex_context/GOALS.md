@@ -19,6 +19,8 @@ interface polish, or a fully general Newton solver.
 The simulator should eventually demonstrate:
 
 - entry-driven expansion of definitions;
+- flat partial instantiation of parameterized headwords without primitive
+  interpretation;
 - lazy demand propagation;
 - degree-0 return behaviour up the demand tree;
 - backwards-pass reduction and residual cleanup;
@@ -32,6 +34,8 @@ The simulator should eventually demonstrate:
 The existing implementation has useful bones:
 
 - `engine.py` builds the dictionary, tokenises definitions, and analyses text.
+- `application.py` isolates parameterized signatures, calls, arity checks,
+  and the current replaceable flat-instantiation rule.
 - `residual.py` and `definiens.py` represent text with headword holes.
 - `demand.py` stores the trace tree, per-position resolutions, event records,
   cycle reads, reduction overlays, cleanup state, and degree counts.

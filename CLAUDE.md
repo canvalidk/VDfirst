@@ -17,6 +17,8 @@ as the implementation/test surface.
 - `engine.py` - `VDInstance`, `Tokeniser`, `Entry`, dependency graph,
   three-cycle / law / house detection, structural audits, and
   `analyse(text) -> Definiens`.
+- `application.py` - parameterized-headword signatures and calls, arity
+  checks, and simultaneous flat partial instantiation.
 - `residual.py` - `Residual` type. Positional latent strings + holes.
 - `definiens.py` - `Definiens` type. `Residual` paired with parallel
   headwords. Tokeniser output and simulator-facing object.
@@ -43,7 +45,12 @@ as the implementation/test surface.
 - `run_repl.py` is the Newton simulator entry point.
 - Cycle information is implemented: `Demand.ancestor_cycle`, worklist
   cycle suffixes, and the expand revisit warning (exact-string headword
-  match, per Token Prop 3).
+  call match).
+- Parameterized headwords are implemented as an explicit prototype:
+  underscores introduce positional arguments, one signature is allowed per
+  stem, under-application leaves remaining formals visible, over-application
+  errors, and expansion instantiates simultaneously before lazy tokenisation.
+  See `specs/2026-09-01-vd-parameterized-headwords.md`.
 - Reduction is implemented end to end: the `reduced` overlay on
   `Demand` (short-circuit in both render pathways, `unresolve`
   clearing up the ancestor chain) plus the REPL surface — `reduce`,
@@ -62,7 +69,7 @@ as the implementation/test surface.
   `onward` routes to the deepest unresolved ancestor, and
   `Demand.degree` counts open holes in a subtree. `back` is removed;
   committed trace structure is never destroyed (ADR 5, no severing).
-- Expected test result: 313 passing tests.
+- Expected test result: 364 passing tests.
 - Next likely work: Design 2.1 interaction integration, richer trace
   presentation such as `tree` or `show <headword>`, and any automated
   compression-on-resolve UX if it is still wanted.
