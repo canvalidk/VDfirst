@@ -4,6 +4,7 @@
 - Status: Implemented prototype
 - Branch: `codex/parameterized-headwords`
 - Scope: underscore calls, flat partial instantiation, tokenizer and trace integration
+- Decision history: [Function-call model](../docs/decision-history/2026-09-01-function-call-model.md)
 
 ## 1. Purpose
 

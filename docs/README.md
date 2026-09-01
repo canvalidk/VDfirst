@@ -15,6 +15,8 @@ It is separate from:
 
 - `ROADMAP.md` - current build path from simulator cleanup toward trace proof
   of concept.
+- `decision-history/` - chronological question-and-answer records, including
+  temporary choices that must be revisited.
 - `adr/` - architecture decision records for durable design choices.
 - `examples/` - golden examples and trace sketches.
 - `glossary/` - living terms shared between Theory, Newton, and Code.
@@ -34,4 +36,3 @@ For a new technical reader:
 
 Docs here should explain stable direction and decisions. Rough ideas belong in
 `codex_context/notes/` or in a spec marked `Sketch` or `Draft`.
-
