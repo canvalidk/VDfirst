@@ -31,6 +31,7 @@ This file tracks which specs are active, historical, or only exploratory.
 | `2026-06-10-vd-reduction.md` | Implemented | Backwards-pass reduction overlays plus reduce/unreduce/fold REPL surface; resolutions in spec §13. |
 | `2026-06-10-vd-residual-cleanup.md` | Implemented | Residual prose cleanup: gap-wise latent edits, tidy sweep, prompt-only offers; resolutions in spec §11. |
 | `2026-06-11-vd-degree0-return.md` | Implemented | Degree-0 return: parked gates, reduce pops a frame, `onward`, `back` removed per ADR 5. |
+| `2026-10-20-prediction-set-segment.md` | Implemented | Frozen response evidence, trace-derived prediction candidates, explicit categories and JSON export. |
 
 ## Next Likely Spec Segments
 
