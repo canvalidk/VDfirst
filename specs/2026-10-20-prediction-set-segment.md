@@ -2,6 +2,10 @@
 
 Status: Implemented.
 
+Follow-up: `2026-10-24-prediction-correction.md` adds current recorded-support
+selection and combines this layer with parameterized headwords. The deferred
+list below describes the original segment's boundary.
+
 ## Scope
 
 Implement the mechanical bridge from trace responses to inspectable prediction

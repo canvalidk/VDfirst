@@ -121,6 +121,7 @@ EXPECTED_HELP = [
     "trace-only:",
     help_line("cancel", "abandon the entire trace"),
     help_line("classify <id> <category>", "label a prediction; does not verify it"),
+    help_line("down <pos>", "inspect a child, including settled calculations"),
     help_line("events", "show trace event history"),
     help_line("expand [pos]", "expand an open hole into a dictionary entry"),
     help_line("flatten [pos|all]", "make active open holes inert literals"),

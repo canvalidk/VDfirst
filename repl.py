@@ -56,6 +56,7 @@ class REPL:
             "all_headwords": self.cmd_headwords,
             "cancel": self.cmd_cancel,
             "classify": self.cmd_classify,
+            "down": self.cmd_down,
             "events": self.cmd_events,
             "expand": self.cmd_expand,
             "flatten": self.cmd_flatten,
@@ -142,6 +143,7 @@ class REPL:
         trace_only = [
             ("cancel", "abandon the entire trace"),
             ("classify <id> <category>", "label a prediction; does not verify it"),
+            ("down <pos>", "inspect a child, including settled calculations"),
             ("events", "show trace event history"),
             ("expand [pos]", "expand an open hole into a dictionary entry"),
             ("flatten [pos|all]", "make active open holes inert literals"),
@@ -244,6 +246,8 @@ class REPL:
             return
         self.print_fn("prediction candidates: partial coverage, recorded history, unchecked")
         self.print_fn(f"current render: {result.result}")
+        if not result.dependency_selection_complete:
+            self.print_fn("current support is incomplete: some response changes were not recorded")
         if not result.trace_complete:
             self.print_fn("trace still has open holes")
         for claim in result.predictions:
@@ -252,13 +256,22 @@ class REPL:
                 path += f" hole {claim.evidence.position}"
             self.print_fn(
                 f"{claim.id} [{claim.classification.category}] "
-                f"{claim.kind} at {path}: {claim.statement}"
+                f"{claim.kind} at {path}: {claim.statement} "
+                f"[{self._prediction_relevance(result, claim.id)}]"
             )
         if not result.predictions:
             self.print_fn("no recorded prediction candidates")
         if result.unrecorded_events:
             self.print_fn(f"events missing evidence: {list(result.unrecorded_events)}")
-        self.print_fn("historical claims may no longer support the current render")
+        self.print_fn("current support records provenance; every claim remains unchecked")
+
+    @staticmethod
+    def _prediction_relevance(result, claim_id: str) -> str:
+        if claim_id in result.current_prediction_ids:
+            return "current support"
+        if claim_id in result.historical_prediction_ids:
+            return "history only"
+        return "support unknown"
 
     def cmd_classify(self, rest: str) -> None:
         """Attach a reader-chosen category, without altering trace evidence."""
@@ -503,6 +516,23 @@ class REPL:
 
         self.print_fn("moved up.")
 
+    def cmd_down(self, rest: str) -> None:
+        """Inspect a committed child, including settled or masked calculations."""
+        if not self._require_trace():
+            return
+        try:
+            pos = int(rest.strip())
+        except ValueError:
+            self.print_fn("usage: down <pos>")
+            return
+        assert self.trace is not None
+        try:
+            self.trace.down(pos)
+        except ValueError as exc:
+            self.print_fn(str(exc))
+            return
+        self.print_fn("moved down.")
+
     def cmd_onward(self, rest: str) -> None:
         """Leave settled frames for the deepest open ancestor."""
         if not self._require_trace():
@@ -578,11 +608,7 @@ class REPL:
             self.print_fn("node is not reduced")
             return
 
-        active.clear_reduction()
-        self.trace.record_event(
-            "unreduce",
-            self._location_tag(active),
-        )
+        self.trace.unreduce_node(active, self._location_tag(active))
         self.print_fn("unreduced.")
 
     def cmd_fold(self, rest: str) -> None:

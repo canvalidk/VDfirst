@@ -32,6 +32,8 @@ Active spec:
 
 Recently implemented:
 
+- `../specs/2026-10-24-prediction-correction.md`
+- `../specs/2026-10-20-prediction-set-segment.md`
 - `../specs/2026-09-01-vd-parameterized-headwords.md`
 - `../specs/2026-05-28-simulator-role-cleanup-segment-1.md`
 - `../specs/2026-05-28-trace-flatten-events-segment.md`

@@ -42,24 +42,27 @@ class PredictionSet:
     """An immutable partial set derived from the recorded history.
 
     result is the current render; it may still contain unresolved holes.
-    Historical claims are not asserted to be dependencies of that result.
+    Current support follows the recorded operations that produced the result.
+    History is retained separately, including reopened or superseded work.
     """
 
     result: str
     trace_complete: bool
     predictions: tuple[Prediction, ...]
     unrecorded_events: tuple[int, ...]
-    schema_version: int = 1
+    schema_version: int = 2
     scope: str = "recorded trace history"
     coverage_complete: bool = False
     limitations: tuple[str, ...] = (
         "Only recorded reductions, cleanup edits and supplied inputs are covered.",
-        "Claims include history, even if a reduction was replaced or cleared; "
-        "dependencies of the current result are not yet selected.",
+        "Current support is recorded response lineage, not a proof or a minimal semantic dependency set.",
         "Equivalence criteria and input fidelity require human interpretation.",
         "This is not the full disjunction of alternatives and gives no theory verdict.",
         "Direct Demand mutations bypass recording; use the Trace recording methods.",
     )
+    current_prediction_ids: tuple[str, ...] = ()
+    historical_prediction_ids: tuple[str, ...] = ()
+    dependency_selection_complete: bool = False
 
     def to_dict(self) -> dict:
         """Return a fresh JSON-compatible object."""
@@ -110,7 +113,21 @@ def build_prediction_set(
     unknown = set(annotations) - {claim.id for claim in predictions}
     if unknown:
         raise ValueError(f"unknown prediction IDs: {', '.join(sorted(unknown))}")
+    support = trace.root.claim_support()
+    claim_ids = {claim.id for claim in predictions}
+    current_ids = tuple(
+        f"P{index}" for index in support.event_indexes if f"P{index}" in claim_ids
+    )
+    selection_complete = (
+        support.complete and not unrecorded
+        and len(current_ids) == len(support.event_indexes)
+    )
+    historical_ids = tuple(
+        claim.id for claim in predictions if claim.id not in current_ids
+    ) if selection_complete else ()
     return PredictionSet(
         result=trace.root.text(), trace_complete=trace.is_complete,
         predictions=tuple(predictions), unrecorded_events=tuple(unrecorded),
+        current_prediction_ids=current_ids, historical_prediction_ids=historical_ids,
+        dependency_selection_complete=selection_complete,
     )

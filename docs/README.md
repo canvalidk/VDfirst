@@ -21,6 +21,8 @@ It is separate from:
 - `examples/` - golden examples and trace sketches.
   See [trace-derived prediction candidates](examples/prediction-set.md) for
   the response-to-claim layer, classification, and its current coverage.
+  The [mistake and correction walkthrough](examples/correction-demo.md) combines
+  parameterized calls with current-support selection and retained history.
 - `glossary/` - living terms shared between Theory, Newton, and Code.
 - `process/` - workflows for turning ideas into specs, tests, and code.
 

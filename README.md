@@ -35,15 +35,17 @@ Type `help` in the REPL for the command list. Core commands include
 mode use `expand`, `recall`, `inject`, `flatten`, `return`, `events`,
 `worklist`, `goto N` / `go to N`, `state`, `up`, `onward`, `reduce`,
 `unreduce`, `fold`, `tidy`, `set`, and `cancel`.
+Use `down <pos>` to revisit a settled child calculation for inspection or
+correction.
 
 Use `predictions` to inspect recorded meaning-preservation and supplied-input
 claims. `classify P2 correct maths` or `classify P1 parameter input` attaches
 your category; it does not verify the claim. `predictions json` prints the
 structured export, including before/after evidence and trace addresses.
 
-This first layer covers recorded history. It does not yet assemble the full
-prediction-set disjunction or select which historical claims the current
-answer depends on. See [the worked example](docs/examples/prediction-set.md).
+The projection retains history and selects recorded claims supporting the
+current result. The full prediction-set disjunction and semantic checking
+remain deferred. See [the worked example](docs/examples/prediction-set.md).
 
 For a self-contained example with two parameter inputs and one reduction:
 
@@ -52,10 +54,23 @@ python prediction_demo.py
 python prediction_demo.py > predictions.json
 ```
 
+For a parameterized call with a deliberately mistaken response, a dependent
+report, and a correction that keeps the earlier evidence:
+
+```powershell
+python correction_demo.py
+python correction_demo.py --json > correction-stages.json
+python correction_demo.py --interactive
+```
+
+The demo distinguishes current support from history at each stage. Interpreter
+responses are scripted and every claim stays unchecked. See the
+[correction walkthrough](docs/examples/correction-demo.md) for REPL instructions.
+
 ## Tests
 
 ```powershell
 python -m pytest -q
 ```
 
-Expected baseline: 383 passing tests.
+Expected baseline: 404 passing tests.

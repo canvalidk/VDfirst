@@ -27,3 +27,7 @@ current code are the implementation contract.
 - `2026-06-10-vd-cycle-info.md` - draft trace cycle-information surface.
 - `2026-09-01-vd-parameterized-headwords.md` - implemented prototype for
   underscore function calls and flat partial instantiation.
+- `2026-10-20-prediction-set-segment.md` - recorded responses, classifications,
+  and prediction candidate export.
+- `2026-10-24-prediction-correction.md` - integrated parameterized traces,
+  current recorded support, and mistake/correction demo.

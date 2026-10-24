@@ -1,6 +1,6 @@
 # Trace-derived prediction candidates
 
-Status: implemented first segment.
+Status: implemented first segment, extended by the correction/support segment.
 
 The evaluator records what happened. `prediction_set.py` reads those records
 and produces a separate, immutable set of claim candidates. Human categories
@@ -53,9 +53,9 @@ redirected to a file as shown in the root README.
 
 ## Programmatic use
 
-Use `Trace.reduce_node`, `Trace.inject_node`, `Trace.clean_node`, and
-`Trace.clean_recall` to mutate and record together. The existing low-level
-`Demand` methods still work, but bypass evidence recording.
+Use `Trace.reduce_node`, `Trace.unreduce_node`, `Trace.inject_node`,
+`Trace.clean_node`, and `Trace.clean_recall` to mutate and record together.
+The existing low-level `Demand` methods still work, but bypass evidence recording.
 
 ```python
 from prediction_set import Classification, build_prediction_set
@@ -80,11 +80,22 @@ Supplied inputs provisionally get an appropriateness obligation; that wording
 does not settle whether injection ultimately belongs in the same equality family.
 
 The set includes recorded history, including replaced or cleared reductions.
-It is not yet a dependency slice for the current answer. Its
-`coverage_complete` field is always false: it omits recognition, dictionary
-selection, scene-to-sheet fidelity, missing-object alternatives, and other
+Schema version 2 adds `current_prediction_ids`, `historical_prediction_ids`,
+and `dependency_selection_complete`. These select recorded response lineage
+for the current result; they do not decide semantic necessity or correctness.
+A replacement made directly on an existing overlay consumes its earlier
+claim. To correct the original calculation, first use `unreduce`.
+
+Unrecorded response mutations or legacy events leave selection incomplete;
+in that case the export does not assert that other claims are history-only.
+Compression retains the underlying child's support. Cleanup beneath an
+overlay becomes current when that overlay is reopened.
+
+The `coverage_complete` field is always false: the projection omits recognition,
+dictionary selection, scene-to-sheet fidelity, missing-object alternatives, and other
 families needed for a full prediction-set disjunction. No red/green verdict,
 automatic correctness check, or logical OR is inferred from this list.
 
-Next research-facing choices are the interpretation/checking interface,
-dependencies on the current answer, and which additional families to emit.
+The [correction walkthrough](correction-demo.md) demonstrates current support
+and retained history with parameterized calls. Next research-facing choices
+are the interpretation/checking interface and which additional families to emit.

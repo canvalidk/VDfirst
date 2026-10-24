@@ -25,6 +25,8 @@ as the implementation/test surface.
 - `simulator.py` - read-only inspection oracle over a `VDInstance`.
 - `demand.py` - demand graph and trace state over immutable `Definiens`
   objects.
+- `prediction_set.py` - immutable claim projection and current response support.
+- `correction_demo.py` - parameterized mistake/reopen/correction walkthrough.
 - `repl.py` - command loop for simulator inspection and trace commands.
 - `run_repl.py` - launcher for the Newton simulator REPL.
 - `newton.py` - Newton case study entries.
@@ -69,7 +71,13 @@ as the implementation/test surface.
   `onward` routes to the deepest unresolved ancestor, and
   `Demand.degree` counts open holes in a subtree. `back` is removed;
   committed trace structure is never destroyed (ADR 5, no severing).
-- Expected test result: 364 passing tests.
+- Prediction recording and parameterized calls are integrated. Reduction,
+  injection and cleanup preserve frozen evidence. `predictions [json]` exports
+  history and current support; `classify` supplies labels without verification.
+  `down <pos>` revisits settled children. Reopening or changing a child clears
+  consuming reductions up the parent chain while retaining their events.
+  See `specs/2026-10-24-prediction-correction.md` and `correction_demo.py`.
+- Expected test result: 404 passing tests.
 - Next likely work: Design 2.1 interaction integration, richer trace
   presentation such as `tree` or `show <headword>`, and any automated
   compression-on-resolve UX if it is still wanted.
