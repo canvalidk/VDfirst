@@ -10,6 +10,7 @@ Code-only repository for the Valid Dictionary (VD) engine.
 - Simulator inspection layer: `simulator.py`
 - REPL inspection and trace loop: `repl.py`
 - Trace demand state: `demand.py`
+- Trace-derived prediction candidates and classifications: `prediction_set.py`
 - Newton case study: `newton.py`
 - Display/visualisation helpers: `display.py`, `viz.py`, `vd_demo.py`
 - Project documentation: `docs/`
@@ -35,10 +36,26 @@ mode use `expand`, `recall`, `inject`, `flatten`, `return`, `events`,
 `worklist`, `goto N` / `go to N`, `state`, `up`, `onward`, `reduce`,
 `unreduce`, `fold`, `tidy`, `set`, and `cancel`.
 
+Use `predictions` to inspect recorded meaning-preservation and supplied-input
+claims. `classify P2 correct maths` or `classify P1 parameter input` attaches
+your category; it does not verify the claim. `predictions json` prints the
+structured export, including before/after evidence and trace addresses.
+
+This first layer covers recorded history. It does not yet assemble the full
+prediction-set disjunction or select which historical claims the current
+answer depends on. See [the worked example](docs/examples/prediction-set.md).
+
+For a self-contained example with two parameter inputs and one reduction:
+
+```powershell
+python prediction_demo.py
+python prediction_demo.py > predictions.json
+```
+
 ## Tests
 
 ```powershell
-pytest test_*.py
+python -m pytest -q
 ```
 
-Expected baseline: 364 passing tests.
+Expected baseline: 383 passing tests.

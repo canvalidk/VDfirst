@@ -19,6 +19,8 @@ It is separate from:
   temporary choices that must be revisited.
 - `adr/` - architecture decision records for durable design choices.
 - `examples/` - golden examples and trace sketches.
+  See [trace-derived prediction candidates](examples/prediction-set.md) for
+  the response-to-claim layer, classification, and its current coverage.
 - `glossary/` - living terms shared between Theory, Newton, and Code.
 - `process/` - workflows for turning ideas into specs, tests, and code.
 
