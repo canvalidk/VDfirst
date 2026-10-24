@@ -17,12 +17,16 @@ as the implementation/test surface.
 - `engine.py` - `VDInstance`, `Tokeniser`, `Entry`, dependency graph,
   three-cycle / law / house detection, structural audits, and
   `analyse(text) -> Definiens`.
+- `application.py` - parameterized-headword signatures and calls, arity
+  checks, and simultaneous flat partial instantiation.
 - `residual.py` - `Residual` type. Positional latent strings + holes.
 - `definiens.py` - `Definiens` type. `Residual` paired with parallel
   headwords. Tokeniser output and simulator-facing object.
 - `simulator.py` - read-only inspection oracle over a `VDInstance`.
 - `demand.py` - demand graph and trace state over immutable `Definiens`
   objects.
+- `prediction_set.py` - immutable claim projection and current response support.
+- `correction_demo.py` - parameterized mistake/reopen/correction walkthrough.
 - `repl.py` - command loop for simulator inspection and trace commands.
 - `run_repl.py` - launcher for the Newton simulator REPL.
 - `newton.py` - Newton case study entries.
@@ -43,7 +47,12 @@ as the implementation/test surface.
 - `run_repl.py` is the Newton simulator entry point.
 - Cycle information is implemented: `Demand.ancestor_cycle`, worklist
   cycle suffixes, and the expand revisit warning (exact-string headword
-  match, per Token Prop 3).
+  call match).
+- Parameterized headwords are implemented as an explicit prototype:
+  underscores introduce positional arguments, one signature is allowed per
+  stem, under-application leaves remaining formals visible, over-application
+  errors, and expansion instantiates simultaneously before lazy tokenisation.
+  See `specs/2026-09-01-vd-parameterized-headwords.md`.
 - Reduction is implemented end to end: the `reduced` overlay on
   `Demand` (short-circuit in both render pathways, `unresolve`
   clearing up the ancestor chain) plus the REPL surface — `reduce`,
@@ -62,7 +71,13 @@ as the implementation/test surface.
   `onward` routes to the deepest unresolved ancestor, and
   `Demand.degree` counts open holes in a subtree. `back` is removed;
   committed trace structure is never destroyed (ADR 5, no severing).
-- Expected test result: 313 passing tests.
+- Prediction recording and parameterized calls are integrated. Reduction,
+  injection and cleanup preserve frozen evidence. `predictions [json]` exports
+  history and current support; `classify` supplies labels without verification.
+  `down <pos>` revisits settled children. Reopening or changing a child clears
+  consuming reductions up the parent chain while retaining their events.
+  See `specs/2026-10-24-prediction-correction.md` and `correction_demo.py`.
+- Expected test result: 404 passing tests.
 - Next likely work: Design 2.1 interaction integration, richer trace
   presentation such as `tree` or `show <headword>`, and any automated
   compression-on-resolve UX if it is still wanted.
@@ -116,15 +131,15 @@ triplets.
 2. Input loop + REPL: done for inspection commands.
 3. Demand graph + trace state: done in `demand.py`.
 4. In-trace commands: `EXPAND`, `RECALL`, `INJECT`, navigation,
-   worklist/state display, `goto`, `FLATTEN`, manual `return`, and event
-   display are done. A named `SKIP` verb is not implemented; `goto` covers
-   the user-level workflow for now.
+   worklist/state display, `goto`, `FLATTEN`, manual `return`, `onward`,
+   event display, reduction, cleanup, and policy toggles are done.
 
 Deferred design questions:
 
 - Whether automatic compression-on-resolve belongs in Design 2.1.
 - Whether a full `tree` command should display the demand graph.
 - How much provenance should appear inline in `state`.
+- What the stable taxonomy and fields for typed human-input audit records are.
 - Whether trace save/restore or multi-trace sessions are needed.
 
 ## Working Pattern

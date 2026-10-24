@@ -18,6 +18,15 @@ from typing import Optional
 from itertools import combinations
 import networkx as nx
 
+from application import (
+    ARGUMENT_ATOM_PATTERN,
+    HeadwordApplicationError,
+    HeadwordArityError,
+    HeadwordCall,
+    HeadwordSignature,
+    HeadwordSignatureConflictError,
+    instantiate_definition,
+)
 from residual import Residual
 from definiens import Definiens
 
@@ -55,6 +64,7 @@ class Entry:
     """
     headword: str
     definition: str
+    signature: HeadwordSignature = field(init=False)
 
     # Computed at insertion time (stage-aware)
     index: Optional[int] = None
@@ -64,6 +74,9 @@ class Entry:
     forward_refs: set[str] = field(default_factory=set)     # F_i = H_i \ PD_i
     is_supported: bool = False                               # F_i = ∅
     is_meaningfully_defined: bool = False                    # H_i = ∅
+
+    def __post_init__(self) -> None:
+        self.signature = HeadwordSignature.parse(self.headword)
 
     def short(self) -> str:
         return f"E{self.index}"
@@ -79,17 +92,17 @@ class Tokeniser:
     """
     Headword-aware tokeniser implementing R-TOK-00.
 
-    Three guarantees from the rule ledger:
+    Core guarantees:
       1. No substring matching — headwords only match at delimiter boundaries
       2. Delimiter discipline — explicit set of boundary characters
-      3. Escaping mechanism — (placeholder: backtick escaping, not yet enforced)
-
-    Current implementation note: backtick spans are treated as escaped
-    literal text, despite older wording above calling this a placeholder.
+      3. Backtick spans are escaped literal text
+      4. Underscores introduce positional headword arguments
 
     Strategy:
       - Normalise both headwords and definitions to a canonical form
-      - Match longest headword first, but ONLY at valid delimiter boundaries
+      - Parse authored headwords as signatures (for example ``force_p_t``)
+      - Match their stems longest-first at valid delimiter boundaries
+      - Consume zero through signature-arity underscore arguments
       - Blank matched regions to prevent double-counting
       - Extract residue word-tokens from whatever remains
 
@@ -212,6 +225,106 @@ class Tokeniser:
 
         return matches
 
+    def _signatures(
+        self,
+        headword_set: set[str],
+    ) -> list[HeadwordSignature]:
+        """Parse and validate the temporary one-signature-per-stem rule."""
+
+        by_stem: dict[str, HeadwordSignature] = {}
+        for headword in sorted(headword_set):
+            signature = HeadwordSignature.parse(headword)
+            normalised = self.normalise(signature.stem)
+            key = normalised if self.case_sensitive else normalised.lower()
+            existing = by_stem.get(key)
+            if existing is not None and existing.formals != signature.formals:
+                raise HeadwordSignatureConflictError(
+                    existing.stem,
+                    existing.formals,
+                    signature.formals,
+                )
+            if existing is None:
+                by_stem[key] = signature
+
+        return sorted(
+            by_stem.values(),
+            key=lambda signature: len(self.normalise(signature.stem)),
+            reverse=True,
+        )
+
+    def _find_signature_calls(
+        self,
+        signature: HeadwordSignature,
+        text: str,
+    ) -> list[tuple[int, int, HeadwordCall]]:
+        """Find bare/partial/full calls of one signature in ``text``."""
+
+        base = self.normalise(signature.stem)
+        search_text = text if self.case_sensitive else text.lower()
+        search_base = base if self.case_sensitive else base.lower()
+        argument_re = re.compile(ARGUMENT_ATOM_PATTERN)
+        matches: list[tuple[int, int, HeadwordCall]] = []
+
+        cursor = 0
+        while cursor <= len(search_text) - len(search_base):
+            start = search_text.find(search_base, cursor)
+            if start == -1:
+                break
+            cursor = start + 1
+
+            if not self._is_boundary(text, start - 1):
+                continue
+
+            end = start + len(search_base)
+            actuals: list[str] = []
+            malformed = False
+            while end < len(text) and text[end] == "_":
+                match = argument_re.match(text, end + 1)
+                if match is None:
+                    malformed = True
+                    break
+                actuals.append(match.group(0))
+                end = match.end()
+
+            if malformed or not self._is_boundary(text, end):
+                continue
+
+            call = HeadwordCall(signature.stem, tuple(actuals))
+            if call.arity > signature.arity:
+                surface = text[start:end]
+                raise HeadwordArityError(
+                    surface,
+                    signature.stem,
+                    signature.arity,
+                    call.arity,
+                )
+            matches.append((start, end, call))
+
+        return matches
+
+    def _collect_headword_matches(
+        self,
+        text: str,
+        escaped_mask: list[bool],
+        headword_set: set[str],
+    ) -> tuple[list[tuple[int, int, str, str]], str]:
+        """Return positional (signature, call) matches and blanked text."""
+
+        working = self._mask_escaped(text, escaped_mask)
+        matches: list[tuple[int, int, str, str]] = []
+        for signature in self._signatures(headword_set):
+            for start, end, call in self._find_signature_calls(
+                signature,
+                working,
+            ):
+                matches.append((start, end, signature.text, call.text))
+                working = (
+                    working[:start]
+                    + "\x00" * (end - start)
+                    + working[end:]
+                )
+        return matches, working
+
     def tokenise_definition(
         self, definition: str, headword_set: set[str]
     ) -> tuple[set[str], set[str], set[str]]:
@@ -231,40 +344,21 @@ class Tokeniser:
         text, escaped_mask = self._unescape_with_mask(
             self.normalise(definition)
         )
-        working = self._mask_escaped(text, escaped_mask)
-
-        # Build normalised headword lookup
-        hw_norm_map: dict[str, str] = {}  # normalised → original
-        for hw in headword_set:
-            norm = self.normalise(hw)
-            hw_norm_map[norm] = hw
-
-        # Sort longest-first for greedy matching
-        sorted_norms = sorted(hw_norm_map.keys(), key=len, reverse=True)
-
+        matches, working = self._collect_headword_matches(
+            text,
+            escaped_mask,
+            headword_set,
+        )
         hw_found: set[str] = set()
         match_log: list[dict] = []
-
-        for hw_norm in sorted_norms:
-            matches = self._find_headword_at_boundary(hw_norm, working)
-
-            if matches:
-                original_hw = hw_norm_map[hw_norm]
-                hw_found.add(original_hw)
-
-                # Blank all matched regions with \x00 to prevent re-matching
-                for start, end in matches:
-                    working = (
-                        working[:start]
-                        + '\x00' * (end - start)
-                        + working[end:]
-                    )
-
-                match_log.append({
-                    'headword': original_hw,
-                    'normalised': hw_norm,
-                    'positions': matches,
-                })
+        for start, end, signature, call in matches:
+            hw_found.add(signature)
+            match_log.append({
+                'headword': signature,
+                'call': call,
+                'normalised': self.normalise(signature),
+                'positions': [(start, end)],
+            })
 
         # Extract residue: word-tokens from non-blanked regions
         # Replace blanked chars with spaces, then tokenise
@@ -300,8 +394,8 @@ class Tokeniser:
 
           - residual.latent are the literal chunks of the normalised text
             between headword matches, in order
-          - headwords list holds the original (un-normalised) headword name
-            at each hole position
+          - headwords list holds each canonical call spelling (authored stem,
+            supplied actuals preserved) at its hole position
 
         Self-references are NOT discarded here. That is a higher-layer
         semantic decision; `_tokenise_entry` handles it for stored entries.
@@ -314,24 +408,11 @@ class Tokeniser:
             self.normalise(definition)
         )
 
-        # Normalised → original headword lookup (parallels tokenise_definition)
-        hw_norm_map: dict[str, str] = {self.normalise(hw): hw for hw in headword_set}
-        sorted_norms = sorted(hw_norm_map.keys(), key=len, reverse=True)
-
-        # Collect all matches, blanking as we go to prevent shorter overlap.
-        # Positions returned by the helper index into the input string given
-        # to it; since blanking preserves length, positions remain valid
-        # references into the original normalised `text`.
-        working = self._mask_escaped(text, escaped_mask)
-        matches: list[tuple[int, int, str]] = []
-        for hw_norm in sorted_norms:
-            for start, end in self._find_headword_at_boundary(hw_norm, working):
-                matches.append((start, end, hw_norm_map[hw_norm]))
-                working = (
-                    working[:start]
-                    + '\x00' * (end - start)
-                    + working[end:]
-                )
+        matches, _ = self._collect_headword_matches(
+            text,
+            escaped_mask,
+            headword_set,
+        )
 
         # Sort by position. Overlap should not occur given longest-first +
         # blanking, but assert defensively — silent overlap would corrupt
@@ -348,9 +429,9 @@ class Tokeniser:
         latents: list[str] = []
         headwords: list[str] = []
         cursor = 0
-        for start, end, hw in matches:
+        for start, end, _, call in matches:
             latents.append(text[cursor:start])
-            headwords.append(hw)
+            headwords.append(call)
             cursor = end
         latents.append(text[cursor:])
 
@@ -420,9 +501,33 @@ class VDInstance:
     def headword_list(self) -> list[str]:
         return [e.headword for e in self.entries]
 
+    @property
+    def signatures_by_stem(self) -> dict[str, HeadwordSignature]:
+        """The temporary one-signature-per-exact-stem registry."""
+
+        signatures: dict[str, HeadwordSignature] = {}
+        for entry in self.entries:
+            signatures.setdefault(entry.signature.stem, entry.signature)
+        return signatures
+
     def previously_defined(self, stage: int) -> set[str]:
         """PD_n: headwords from entries before stage n."""
         return {e.headword for e in self.entries[:stage]}
+
+    def _validate_signatures(self, new_entries: list[Entry]) -> None:
+        signatures = self.signatures_by_stem
+        for entry in new_entries:
+            existing = signatures.get(entry.signature.stem)
+            if (
+                existing is not None
+                and existing.formals != entry.signature.formals
+            ):
+                raise HeadwordSignatureConflictError(
+                    entry.signature.stem,
+                    existing.formals,
+                    entry.signature.formals,
+                )
+            signatures.setdefault(entry.signature.stem, entry.signature)
 
     def append(self, headword: str, definition: str) -> Entry:
         """
@@ -435,12 +540,15 @@ class VDInstance:
         the log is complete to fix this.
         """
         entry = Entry(headword=headword, definition=definition)
+        self._validate_signatures([entry])
         entry.index = len(self.entries)
+
+        # Tokenise before committing so an invalid over-applied reference
+        # cannot leave a half-appended entry in the log.
+        prospective_headwords = self.headword_set | {entry.headword}
+        self._tokenise_entry(entry, prospective_headwords)
         self.entries.append(entry)
         self._graph_dirty = True
-
-        # Tokenise against current headword set (best effort for single append)
-        self._tokenise_entry(entry, self.headword_set)
         return entry
 
     def append_many(self, entries: list[tuple[str, str]]) -> list[Entry]:
@@ -453,16 +561,22 @@ class VDInstance:
         This is the correct method per R-SUP-01: HD = {h_1,...,h_N} is the
         complete headword set, not the partial set at each stage.
         """
-        # Pass 1: create entries and collect headwords
-        new_entries = []
+        # Pass 1: create entries and validate signatures without mutation.
+        new_entries: list[Entry] = []
         for hw, defn in entries:
             entry = Entry(headword=hw, definition=defn)
-            entry.index = len(self.entries)
-            self.entries.append(entry)
+            entry.index = len(self.entries) + len(new_entries)
             new_entries.append(entry)
+        self._validate_signatures(new_entries)
 
-        # Pass 2: tokenise ALL entries against complete headword set
-        full_hw = self.headword_set
+        # Preflight every definition before committing the batch.  This
+        # catches over-application while preserving append-only atomicity.
+        full_hw = self.headword_set | {e.headword for e in new_entries}
+        for entry in [*self.entries, *new_entries]:
+            self.tokeniser.tokenise_definition(entry.definition, full_hw)
+
+        # Pass 2: commit, then tokenise ALL entries against the complete set.
+        self.entries.extend(new_entries)
         for e in self.entries:
             self._tokenise_entry(e, full_hw)
 
@@ -513,6 +627,47 @@ class VDInstance:
     def entry_by_headword(self, hw: str) -> list[Entry]:
         """All entries with a given headword (may be >1 for redefines)."""
         return [e for e in self.entries if e.headword == hw]
+
+    def resolve_call(
+        self,
+        text: str,
+    ) -> tuple[HeadwordSignature, HeadwordCall] | None:
+        """Resolve an exact-case call to its dictionary signature."""
+
+        call = HeadwordCall.parse(text)
+        signature = self.signatures_by_stem.get(call.stem)
+        if signature is None:
+            return None
+        signature.check(call)
+        return signature, call
+
+    def entry_by_call(self, text: str) -> list[Entry]:
+        """All entries applicable to a bare, partial, or complete call."""
+
+        resolved = self.resolve_call(text)
+        if resolved is None:
+            return []
+        signature, _ = resolved
+        return [
+            entry for entry in self.entries
+            if entry.signature == signature
+        ]
+
+    def instantiate_entry(self, index: int, call_text: str) -> str:
+        """Instantiate one selected entry for ``call_text``."""
+
+        entry = self.entry_by_index(index)
+        resolved = self.resolve_call(call_text)
+        if resolved is None:
+            raise HeadwordApplicationError(
+                f"no headword signature for {call_text!r}"
+            )
+        signature, call = resolved
+        if entry.signature != signature:
+            raise HeadwordApplicationError(
+                f"E{index} defines {entry.headword!r}, not {call_text!r}"
+            )
+        return instantiate_definition(entry.definition, signature, call)
 
     def entry_by_index(self, i: int) -> Entry:
         return self.entries[i]

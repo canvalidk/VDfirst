@@ -15,6 +15,7 @@ This file tracks which specs are active, historical, or only exploratory.
 | Spec | Status | Role |
 |---|---|---|
 | `2026-05-28-lazy-vd-language-draft.md` | Draft | North-star design for lazy evaluator/programming-language behaviour. |
+| `2026-09-01-vd-parameterized-headwords.md` | Implemented prototype | Underscore calls and flat partial instantiation; replaceable arity/binding band-aids recorded explicitly. |
 
 ## Implemented Historical Specs
 
@@ -31,9 +32,13 @@ This file tracks which specs are active, historical, or only exploratory.
 | `2026-06-10-vd-reduction.md` | Implemented | Backwards-pass reduction overlays plus reduce/unreduce/fold REPL surface; resolutions in spec §13. |
 | `2026-06-10-vd-residual-cleanup.md` | Implemented | Residual prose cleanup: gap-wise latent edits, tidy sweep, prompt-only offers; resolutions in spec §11. |
 | `2026-06-11-vd-degree0-return.md` | Implemented | Degree-0 return: parked gates, reduce pops a frame, `onward`, `back` removed per ADR 5. |
+| `2026-10-20-prediction-set-segment.md` | Implemented | Frozen response evidence, trace-derived prediction candidates, explicit categories and JSON export. |
+| `2026-10-24-prediction-correction.md` | Implemented | Parameterized prediction traces, current recorded support, consumer invalidation and correction demo. |
 
 ## Next Likely Spec Segments
 
-- Automatic degree-0 return/unwind semantics.
+- Revisit parameterized-headword overloading/binding after representative use.
 - Richer audit records.
 - Typed human-input commands.
+- Richer trace presentation such as `tree` or `show <headword>`.
+- Newton proof-trace integration once a representative problem is chosen.

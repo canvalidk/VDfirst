@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from application import HeadwordApplicationError, HeadwordArityError
 from demand import (
     Demand,
     ExpandProvenance,
@@ -15,6 +16,7 @@ from demand import (
     Trace,
 )
 from simulator import Simulator
+from prediction_set import Classification, build_prediction_set
 
 
 PICK_PREVIEW_WIDTH = 60
@@ -45,6 +47,7 @@ class REPL:
     ) -> None:
         self.sim = sim
         self.trace: Trace | None = None
+        self.prediction_classifications: dict[str, Classification] = {}
         self.input_fn = input_fn
         self.print_fn = print_fn
         self.reduce_policy = "on_settle"
@@ -52,6 +55,8 @@ class REPL:
         self.dispatch = {
             "all_headwords": self.cmd_headwords,
             "cancel": self.cmd_cancel,
+            "classify": self.cmd_classify,
+            "down": self.cmd_down,
             "events": self.cmd_events,
             "expand": self.cmd_expand,
             "flatten": self.cmd_flatten,
@@ -63,6 +68,7 @@ class REPL:
             "inject": self.cmd_inject,
             "count": self.cmd_count,
             "onward": self.cmd_onward,
+            "predictions": self.cmd_predictions,
             "recall": self.cmd_recall,
             "reduce": self.cmd_reduce,
             "return": self.cmd_return,
@@ -105,7 +111,12 @@ class REPL:
             self.print_fn(f"unknown command: {cmd}")
             return True
 
-        handler(rest)
+        try:
+            handler(rest)
+        except HeadwordArityError as exc:
+            self.print_fn(f"arity error: {exc}")
+        except HeadwordApplicationError as exc:
+            self.print_fn(f"headword error: {exc}")
         return True
 
     def _prompt(self) -> str:
@@ -131,6 +142,8 @@ class REPL:
         ]
         trace_only = [
             ("cancel", "abandon the entire trace"),
+            ("classify <id> <category>", "label a prediction; does not verify it"),
+            ("down <pos>", "inspect a child, including settled calculations"),
             ("events", "show trace event history"),
             ("expand [pos]", "expand an open hole into a dictionary entry"),
             ("flatten [pos|all]", "make active open holes inert literals"),
@@ -138,6 +151,7 @@ class REPL:
             ("go to N, goto N", "move active focus to worklist entry N"),
             ("inject [pos]", "fill an open hole with user-supplied text"),
             ("onward", "leave settled frames for the deepest open ancestor"),
+            ("predictions [json]", "show trace-derived claims or export JSON"),
             ("reduce", "replace the active node's render with equivalent text"),
             ("return", "return resolved active demand to its parent"),
             ("state", "show the active demand"),
@@ -214,9 +228,65 @@ class REPL:
             return
 
         self.trace = Trace.start(self.sim, text)
+        self.prediction_classifications.clear()
         self.print_fn("trace started.")
         self.cmd_state("")
         self._announce_completion()
+
+    def cmd_predictions(self, rest: str) -> None:
+        """Inspect a partial prediction set separately from the evaluator."""
+        if not self._require_trace():
+            return
+        if rest.strip() not in ("", "json"):
+            self.print_fn("usage: predictions [json]")
+            return
+        result = build_prediction_set(self.trace, self.prediction_classifications)
+        if rest.strip() == "json":
+            self.print_fn(result.to_json())
+            return
+        self.print_fn("prediction candidates: partial coverage, recorded history, unchecked")
+        self.print_fn(f"current render: {result.result}")
+        if not result.dependency_selection_complete:
+            self.print_fn("current support is incomplete: some response changes were not recorded")
+        if not result.trace_complete:
+            self.print_fn("trace still has open holes")
+        for claim in result.predictions:
+            path = "root" + "".join(f"/{pos}" for pos in claim.evidence.before.address)
+            if claim.evidence.position is not None:
+                path += f" hole {claim.evidence.position}"
+            self.print_fn(
+                f"{claim.id} [{claim.classification.category}] "
+                f"{claim.kind} at {path}: {claim.statement} "
+                f"[{self._prediction_relevance(result, claim.id)}]"
+            )
+        if not result.predictions:
+            self.print_fn("no recorded prediction candidates")
+        if result.unrecorded_events:
+            self.print_fn(f"events missing evidence: {list(result.unrecorded_events)}")
+        self.print_fn("current support records provenance; every claim remains unchecked")
+
+    @staticmethod
+    def _prediction_relevance(result, claim_id: str) -> str:
+        if claim_id in result.current_prediction_ids:
+            return "current support"
+        if claim_id in result.historical_prediction_ids:
+            return "history only"
+        return "support unknown"
+
+    def cmd_classify(self, rest: str) -> None:
+        """Attach a reader-chosen category, without altering trace evidence."""
+        if not self._require_trace():
+            return
+        claim_id, _, category = rest.strip().partition(" ")
+        if not category.strip():
+            self.print_fn("usage: classify <id> <category>")
+            return
+        candidates = build_prediction_set(self.trace)
+        if claim_id not in {claim.id for claim in candidates.predictions}:
+            self.print_fn(f"unknown prediction: {claim_id}")
+            return
+        self.prediction_classifications[claim_id] = Classification(category.strip())
+        self.print_fn(f"{claim_id} classified as {category.strip()}; still unchecked.")
 
     def cmd_state(self, rest: str) -> None:
         """Print the active demand's current rendering."""
@@ -446,6 +516,23 @@ class REPL:
 
         self.print_fn("moved up.")
 
+    def cmd_down(self, rest: str) -> None:
+        """Inspect a committed child, including settled or masked calculations."""
+        if not self._require_trace():
+            return
+        try:
+            pos = int(rest.strip())
+        except ValueError:
+            self.print_fn("usage: down <pos>")
+            return
+        assert self.trace is not None
+        try:
+            self.trace.down(pos)
+        except ValueError as exc:
+            self.print_fn(str(exc))
+            return
+        self.print_fn("moved down.")
+
     def cmd_onward(self, rest: str) -> None:
         """Leave settled frames for the deepest open ancestor."""
         if not self._require_trace():
@@ -521,11 +608,7 @@ class REPL:
             self.print_fn("node is not reduced")
             return
 
-        active.clear_reduction()
-        self.trace.record_event(
-            "unreduce",
-            self._location_tag(active),
-        )
+        self.trace.unreduce_node(active, self._location_tag(active))
         self.print_fn("unreduced.")
 
     def cmd_fold(self, rest: str) -> None:
@@ -702,8 +785,7 @@ class REPL:
             if hits:
                 self.print_fn(self._cleanup_rejection(hits))
                 return False
-            node.set_latents(new_latents)
-            self.trace.record_event("clean", self._location_tag(node))
+            self.trace.clean_node(node, new_latents, self._location_tag(node))
             self.print_fn("cleaned.")
             return True
 
@@ -721,9 +803,8 @@ class REPL:
         if hits:
             self.print_fn(self._cleanup_rejection(hits))
             return False
-        node.clean_recall_text(pos, reply)
-        self.trace.record_event(
-            "clean",
+        self.trace.clean_recall(
+            node, pos, reply,
             f"{self._location_tag(node)} pos {pos}",
         )
         self.print_fn("cleaned.")
@@ -750,10 +831,9 @@ class REPL:
         if hits:
             self.print_fn(self._cleanup_rejection(hits))
             return
-        node.clean_recall_text(pos, reply)
         assert self.trace is not None
-        self.trace.record_event(
-            "clean",
+        self.trace.clean_recall(
+            node, pos, reply,
             f"{self._location_tag(node)} pos {pos}",
         )
         self.print_fn("cleaned.")
@@ -789,9 +869,8 @@ class REPL:
         if hits:
             self.print_fn(self._cleanup_rejection(hits))
             return
-        node.set_latents(new_latents)
         assert self.trace is not None
-        self.trace.record_event("clean", self._location_tag(node))
+        self.trace.clean_node(node, new_latents, self._location_tag(node))
         self.print_fn("cleaned.")
 
     def _cleanup_rejection(self, hits: list[str]) -> str:
@@ -826,10 +905,9 @@ class REPL:
             )
             return False
 
-        node.set_reduction(text)
         assert self.trace is not None
-        self.trace.record_event(
-            "reduce",
+        self.trace.reduce_node(
+            node, text,
             f"{self._location_tag(node)}: {text}",
         )
         return True
@@ -924,8 +1002,8 @@ class REPL:
 
         return RecalledEntry(
             index=index,
-            headword=self.sim.entry_headword(index),
-            text=self.sim.entry_text(index),
+            headword=headword,
+            text=self.sim.instantiated_entry_text(index, headword),
         )
 
     def _pick_entry_index(
@@ -947,6 +1025,7 @@ class REPL:
             choice_text = self._entry_choice_text(
                 index,
                 preview_choices,
+                headword,
             )
             self.print_fn(f"  E{index}: {choice_text}")
 
@@ -963,13 +1042,18 @@ class REPL:
 
         return chosen
 
-    def _entry_choice_text(self, index: int, preview: bool) -> str:
+    def _entry_choice_text(
+        self,
+        index: int,
+        preview: bool,
+        headword: str,
+    ) -> str:
+        text = self.sim.instantiated_entry_text(index, headword)
         if preview:
-            return self._entry_preview(index)
-        return self.sim.entry_text(index)
+            return self._entry_preview(text)
+        return text
 
-    def _entry_preview(self, index: int) -> str:
-        text = self.sim.entry_text(index)
+    def _entry_preview(self, text: str) -> str:
         if len(text) <= PICK_PREVIEW_WIDTH:
             return text
         width = PICK_PREVIEW_WIDTH - len(PICK_TRUNCATION_MARKER)
@@ -1024,12 +1108,11 @@ class REPL:
             self.sim.analyse(text),
             provenance=InjectProvenance(text),
         )
-        active.resolve_inject(pos, child)
-        self.trace.active = child
-        self.trace.record_event(
-            "inject",
+        self.trace.inject_node(
+            active, pos, child, text,
             f"position {pos}: {text}",
         )
+        self.trace.active = child
         self.print_fn(f"injected at position {pos}; now at child.")
         self._offer_reduce_on_settle(child)
         if self.cleanup_policy == "on_every_resolution" or (
