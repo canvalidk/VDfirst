@@ -47,6 +47,7 @@ What the recorder still cannot say (the test_open_* tests pin it down):
 from __future__ import annotations
 
 import json
+import os
 import sys
 from fractions import Fraction as F
 from pathlib import Path
@@ -55,8 +56,9 @@ import pytest
 
 from handtrace import ROOT, HiddenLookupError, Trace, TraceError, load_entries
 
-ENTRIES = Path("C:/Users/canva/Documents/Amy hobby/VD instructions/codex VD newton/"
-               "07_design_2_1/DESIGN_2_1_DRAFT_1_ENTRIES.md")
+# Set VD_ENTRIES to the entries file; without it the quotes are not verified.
+ENTRIES = Path(os.environ.get("VD_ENTRIES", "C:/Users/canva/Documents/Amy hobby/VD instructions/codex VD newton/"
+                                           "07_design_2_1/DESIGN_2_1_DRAFT_1_ENTRIES.md"))
 
 EDITION = {
     "entries": "Design 2.1 Draft 1, E7-E9 (DESIGN_2_1_DRAFT_1_ENTRIES.md)",

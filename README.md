@@ -44,6 +44,10 @@ lookup rule, withdrawals, and per-answer ledgers and hypothesis sets.
 It cites the dictionary and never executes it. See
 `specs/2026-11-08-hand-trace-ledger.md`.
 
+The examples verify their ENTRY quotes against the Design 2.1 entries file
+(`DESIGN_2_1_DRAFT_1_ENTRIES.md` in VD-Newton). Point `VD_ENTRIES` at it;
+without it the examples still run and the quote checks are skipped.
+
 ```powershell
 python handtrace_example_atwood.py            # print the Atwood trace and its ledger
 python handtrace.py validate RECORD.json      # check a saved record's digest and replay it

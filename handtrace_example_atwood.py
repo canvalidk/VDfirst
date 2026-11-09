@@ -38,6 +38,7 @@ Gaps v2 leaves open here (recorded in step text, not as failing tests):
 from __future__ import annotations
 
 import json
+import os
 import sys
 from fractions import Fraction
 from itertools import product
@@ -50,8 +51,9 @@ try:  # the tests below use pytest; the script runs without it
 except ImportError:  # pragma: no cover
     pytest = None
 
-ENTRIES = Path("C:/Users/canva/Documents/Amy hobby/VD instructions/codex VD newton/"
-               "07_design_2_1/DESIGN_2_1_DRAFT_1_ENTRIES.md")
+# Set VD_ENTRIES to the entries file; without it the quotes are not verified.
+ENTRIES = Path(os.environ.get("VD_ENTRIES", "C:/Users/canva/Documents/Amy hobby/VD instructions/codex VD newton/"
+                                           "07_design_2_1/DESIGN_2_1_DRAFT_1_ENTRIES.md"))
 
 QUESTION = ("Two blocks, m1 = 3 kg and m2 = 5 kg, hang from a massless, inextensible string over a "
             "frictionless pulley fixed to a support. Supplied g = 9.8 m/s². Find the acceleration of "
@@ -576,7 +578,7 @@ ANNOTATIONS = {
 
 
 def build() -> Trace:
-    t = Trace(QUESTION, EDITION, entries=load_entries(str(ENTRIES)))
+    t = Trace(QUESTION, EDITION, entries=load_entries(str(ENTRIES)) if ENTRIES.exists() else None)
     to_answer(t)
     consequences(t)
     for name, (status, cm, note) in ANNOTATIONS.items():
