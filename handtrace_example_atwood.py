@@ -45,6 +45,7 @@ from itertools import product
 from pathlib import Path
 
 from handtrace import ROOT, Trace, TraceError, frac, load_entries, parse_equation, solve_linear
+from handtrace_example_atwood_statuses import MOUNT_STATUSES, P_STATUSES
 
 try:  # the tests below use pytest; the script runs without it
     import pytest
@@ -581,8 +582,14 @@ def build() -> Trace:
     t = Trace(QUESTION, EDITION, entries=load_entries(str(ENTRIES)) if ENTRIES.exists() else None)
     to_answer(t)
     consequences(t)
+    # T§10(b) as the source states it, for the premises that do not feed p (checks need a feeding premise);
+    # every premise feeding p or mount gets a checked status (handtrace_example_atwood_statuses.py).
     for name, (status, cm, note) in ANNOTATIONS.items():
-        t.annotate(name, status, countermodel=cm, note=note, answer="p")  # T§10(b) is relative to p
+        if name not in P_STATUSES:
+            t.annotate(name, status, countermodel=cm, note=note, answer="p")  # T§10(b) is relative to p
+    for label, table in (("p", P_STATUSES), ("mount", MOUNT_STATUSES)):
+        for name, (status, cm, note, check) in table.items():
+            t.annotate(name, status, countermodel=cm, note=note, answer=label, check=check)
     return t
 
 
@@ -874,9 +881,11 @@ def test_post_answer_steps_do_not_feed_p_and_the_mount_load_rests_on_q1_q7():
     p = _placements(t.ledger(answer="p"))
     mount = _placements(t.ledger(answer="mount"))
     for q in ("Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7"):
-        assert p[q][0] == "out" and mount[q][0] == "member"
-    # statuses are per binding, not per answer: the Q rows carry no status for 'mount'
-    assert any("no status yet" in w and "Q1" in w for w in t.ledger(answer="mount")["warnings"])
+        assert p[q][0] == "out"
+        # Q5 is ENTAILED for mount (by K-c, Q4 and Q6 through E9), so it is pruned; the rest are members
+        assert mount[q][0] == ("pruned" if q == "Q5" else "member")
+    # every premise of either answer has a status scoped to that answer
+    assert not any("no status yet" in w for lb in ("p", "mount") for w in t.ledger(answer=lb)["warnings"])
 
 
 def test_counterparts_on_sigma_keep_distinct_addresses():
@@ -887,12 +896,52 @@ def test_counterparts_on_sigma_keep_distinct_addresses():
                   ref="C-PAIR")
 
 
-def test_statuses_for_p_do_not_prune_premises_of_the_mount_answer():
-    """T§10(b)'s statuses are scoped to p (annotate(answer='p')), so W19's USES does not prune bn and
-    sigma1 from H(mount), which rests on them."""
+def test_statuses_are_scoped_to_their_answer():
+    """T§10(b)'s statuses are scoped to p. For mount, bn is NEEDS (checked: a non-Newtonian shortfall at both
+    string ends changes the load), so W19's 'matters only in T§7' USES for p does not prune it there; sigma1 is
+    USES for mount too (splitting σ into two massless pieces leaves -147/2)."""
     _need_entries()
-    mount = _placements(build().ledger(answer="mount"))
-    assert mount["bn"][0] == "member" and mount["sigma1"][0] == "member"
+    t = build()
+    mount = _placements(t.ledger(answer="mount"))
+    assert mount["bn"][0] == "member" and mount["sigma1"][0] == "pruned"
+    assert t._annotation("bn", "p")["status"] == "USES" and t._annotation("bn", "mount")["status"] == "NEEDS"
+
+
+def test_every_premise_of_p_and_mount_has_a_checked_status():
+    _need_entries()
+    t = build()
+    for lb, table in (("p", P_STATUSES), ("mount", MOUNT_STATUSES)):
+        led = t.ledger(answer=lb)
+        feeding = {c["name"] for c in led["commitments"] + led["pruned"]}
+        assert feeding == set(table), (lb, feeding ^ set(table))
+        assert all("check" in c for c in led["commitments"] + led["pruned"])
+
+
+def test_the_only_check_warnings_are_the_recorded_text_gaps():
+    """What the checks cannot confirm, and why: P-EQV's free-fall reading of g, M-EQ's E-a and E-b, M-KIN's
+    K-a to K-e and Q5's E9 argument are all recorded as text; pairS1 and pairS2 (the counterparts on σ) do not
+    cite the vertical segments they presuppose."""
+    _need_entries()
+    t = build()
+    assert t.ledger("p")["warnings"] == [
+        "the check of peqv1 does not support ENTAILED: not entailed by w1, g",
+        "the check of peqv2 does not support ENTAILED: not entailed by w2, g",
+        "the check of meq does not support ENTAILED: not entailed by the other premises",
+        "the check of mkin could not be made: mkin carries no relation or value"]
+    mount = t.ledger("mount")["warnings"]
+    assert len(mount) == 7
+    assert sum(w.startswith("the countermodel for pull") and "pairS" in w for w in mount) == 2
+    assert "the check of Q5 does not support ENTAILED: not entailed by the other premises" in mount
+
+
+def test_the_source_countermodels_are_reproduced_by_the_checked_statuses():
+    _need_entries()
+    t = build()
+    led = {c["name"]: c for c in t.ledger("p")["commitments"]}
+    assert led["m1"]["check"].startswith("refutes p: a1 = 49/45")      # CM1
+    assert led["rin"]["check"].startswith("refutes p: a1 = 27/10")     # CM2
+    assert led["Eb"]["check"].startswith("refutes p: a1 = 98/45")      # CM4
+    assert led["comp1"]["check"].startswith("refutes p: a1 = 93/40")   # CM6
 
 
 def test_delivery_lands_at_the_sites_caller():

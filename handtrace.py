@@ -1557,7 +1557,7 @@ class Trace:
         return st
 
     def annotate(self, name: str, status: str, *, countermodel: str = "", note: str = "",
-                 answer: str = "") -> None:
+                 answer: str = "", check: Mapping | None = None) -> None:
         """Attach a NEEDS/REQUIRED/ENTAILED/USES status to an INPUT's binding.
 
         Need is relative to a prediction: pass answer=label to annotate for
@@ -1565,7 +1565,16 @@ class Trace:
         has no status of its own for this premise. NEEDS requires a
         countermodel: a world where every other premise holds and the
         prediction fails. ENTAILED and USES prune the premise from that
-        answer's hypothesis set. Countermodels are recorded, not checked.
+        answer's hypothesis set.
+
+        check= makes the status checked, against answer= (required). For
+        NEEDS, REQUIRED and USES it is a countermodel in the form
+        check_countermodel takes (replace=, remove=, add=, values=,
+        drop_dependents=); for ENTAILED it is {'entailed_by': [names]} (see
+        check_entailed). The result is kept with the annotation, shown in the
+        ledger, and warned about when it does not support the status:
+        NEEDS and REQUIRED need 'refutes p' or 'p does not follow', ENTAILED
+        needs 'entailed', USES needs 'p still follows'.
         """
         b = self.bindings.get(name)
         if b is None or self.steps[b.step].op != "INPUT":
@@ -1576,9 +1585,276 @@ class Trace:
             raise TraceError("a NEEDS status requires a countermodel")
         if answer and answer not in {lb for lb, _ in self.answers}:
             raise TraceError(f"no answer labelled {answer!r}")
-        self.annotations.setdefault(name, {})[answer or "*"] = {"status": status, "countermodel": countermodel,
-                                                                "note": note}
-        self._record("annotate", name=name, status=status, countermodel=countermodel, note=note, answer=answer)
+        result = None
+        if check is not None:
+            if not answer:
+                raise TraceError("a checked status needs answer=: need is relative to one prediction")
+            spec = dict(check)
+            try:
+                if status == "ENTAILED":
+                    extra = set(spec) - {"entailed_by"}
+                    if extra:
+                        raise TraceError(f"an ENTAILED check takes only entailed_by=, not {sorted(extra)}")
+                    result = self.check_entailed(name, answer=answer, by=spec.get("entailed_by", ()))
+                else:
+                    result = self.check_countermodel(name, answer=answer, **spec)
+            except TypeError as exc:
+                raise TraceError(f"malformed check for {name}: {exc}") from None
+            result["supports"] = _supports(status, result["verdict"])
+        entry = {"status": status, "countermodel": countermodel, "note": note}
+        if result is not None:
+            entry["check"] = result
+        self.annotations.setdefault(name, {})[answer or "*"] = entry
+        args = dict(name=name, status=status, countermodel=countermodel, note=note, answer=answer)
+        if check is not None:
+            args["check"] = dict(check)
+        self._record("annotate", **args)
+
+    # -- checked countermodels -------------------------------------------------
+
+    def _premise_system(self, answer: str) -> tuple[dict[str, str], dict[str, Fraction]]:
+        """The answer's premise relations (bound by INPUT, ENTRY, CONTRACT, READING or EXTERNAL; DERIVE
+        relations are consequences and are recomputed) and its supplied INPUT values, as of the answer."""
+        idx = self._answer_index(answer)
+        cone = self.cone(answer)
+        rels: dict[str, str] = {}
+        vals: dict[str, Fraction] = {}
+        for b in self.bindings.values():
+            if b.step not in cone or (b.withdrawn is not None and b.withdrawn < idx):
+                continue
+            st = self.steps[b.step]
+            if b.sort == "relation" and st.op in ("INPUT", "ENTRY", "CONTRACT", "READING", "EXTERNAL"):
+                rels[b.name] = b.equation
+            elif b.sort == "value" and st.op == "INPUT":
+                v = self._value_from_step(b.name, st.index)
+                if v is not None:
+                    vals[b.name] = v
+        return rels, vals
+
+    def _answer_targets(self, answer: str) -> dict[str, Fraction]:
+        idx = self._answer_index(answer)
+        out = {}
+        for n in self.steps[idx].uses:
+            earlier = [v for v, at in self.value_history.get(n, []) if at < idx]
+            out[n] = earlier[-1]
+        return out
+
+    def _premises_of(self, name: str) -> set[str]:
+        """The INPUT premises in the dependency closure of name's binding step (name itself if an INPUT)."""
+        seen: set[int] = set()
+        stack = [self.bindings[name].step]
+        out: set[str] = set()
+        while stack:
+            i = stack.pop()
+            if i in seen:
+                continue
+            seen.add(i)
+            st = self.steps[i]
+            if st.op == "INPUT":
+                out.add(st.binds[0])
+            stack.extend(st.deps)
+        return out
+
+    def _check_premise(self, premise: str, answer: str) -> Binding:
+        b = self.bindings.get(premise)
+        if b is None or self.steps[b.step].op != "INPUT":
+            raise TraceError(f"{premise!r} is not bound by an INPUT step")
+        if b.step not in self.cone(answer):
+            raise TraceError(f"{premise!r} does not feed answer {answer!r}")
+        return b
+
+    def check_countermodel(self, premise: str, *, answer: str, replace: Mapping[str, object] | None = None,
+                           remove: Sequence[str] = (), add: Sequence[str] = (),
+                           values: Mapping[str, object] | None = None, drop_dependents: bool = False) -> dict:
+        """Check a countermodel to premise for answer, exactly. Records nothing.
+
+        The answer is rebuilt from its premise relations and supplied values
+        (relations bound by DERIVE are consequences and are left out). The
+        rebuilt system must reproduce the answer. The countermodel then
+        changes it: replace= gives a premise relation a new equation or a
+        supplied value a new value; remove= drops relations or values; add=
+        adds equations (new names are new quantities, free unless values=
+        gives them a value); drop_dependents=True drops every premise
+        relation and value that rests on the premise (the test for a
+        precondition: without it the relations it licenses do not apply).
+
+        Verdicts: 'refutes p' (consistent, and some answer quantity is fixed
+        to another value: p fails in every such world), 'p does not follow'
+        (consistent, nothing fixed otherwise, something left open: p fails in
+        some such world), 'p still follows', 'inconsistent' (no such world),
+        'cannot check' (the recorded premises do not reproduce p, or
+        nonlinear relations keep the question open).
+
+        Also reported: 'outside' lists changed relations or values that do
+        not rest on the premise (a countermodel should keep every other
+        premise), and 'violates' says whether the countermodel makes the
+        premise false (True, False, or None when that is not decidable here,
+        as for a premise with no relation or value).
+        """
+        b = self._check_premise(premise, answer)
+        rels, vals = self._premise_system(answer)
+        targets = self._answer_targets(answer)
+        base = _evaluate(rels, vals)
+        base_verdict, base_detail = _judge(base, targets)
+        result = {"premise": premise, "answer": answer, "outside": {}, "violates": None, "changed": []}
+        if base_verdict != "p still follows":
+            return {**result, "verdict": "cannot check",
+                    "detail": f"the recorded premise relations do not reproduce the answer ({base_verdict}: "
+                              f"{base_detail})", "summary": "cannot check: the premises do not reproduce p"}
+        replace = dict(replace or {})
+        values = dict(values or {})
+        remove = list(remove)
+        add = [str(e) for e in add]
+        for n in list(replace) + remove:
+            if n not in rels and n not in vals:
+                raise TraceError(f"{n!r} is not a premise relation or supplied value of answer {answer!r}")
+        for n in values:
+            if n in self.bindings:
+                raise TraceError(f"values= names new quantities; {n!r} exists, so constrain it with add=")
+            if not n.isidentifier():
+                raise TraceError(f"values= keys must be names, not {n!r}")
+        new_rels = {k: v for k, v in rels.items() if k not in remove}
+        new_vals = {k: v for k, v in vals.items() if k not in remove}
+        for n, v in replace.items():
+            if n in rels:
+                eq = str(v)
+                split_claim(eq)
+                self._quantities_only(mentioned_names(eq))
+                new_rels[n] = eq
+            else:
+                new_vals[n] = _to_fraction(v)
+        changed = list(dict.fromkeys(list(replace) + remove))
+        if drop_dependents:
+            for n in list(new_rels) + list(new_vals):
+                if n == premise or premise in self._premises_of(n):
+                    new_rels.pop(n, None)
+                    new_vals.pop(n, None)
+                    changed.append(n)
+        for i, eq in enumerate(add, 1):
+            split_claim(eq)
+            self._quantities_only(mentioned_names(eq))
+            new_rels[f"(added {i})"] = eq
+        for n, v in values.items():
+            new_vals[n] = _to_fraction(v)
+        world = _evaluate(new_rels, new_vals)
+        verdict, detail = _judge(world, targets)
+        outside = {c: sorted(self._premises_of(c)) for c in dict.fromkeys(changed)
+                   if c != premise and premise not in self._premises_of(c)}
+        violates = self._violates(premise, b, rels, vals, new_rels, new_vals, world)
+        summary = f"{verdict}: {detail}" if detail else verdict
+        return {**result, "verdict": verdict, "detail": detail, "summary": summary, "outside": outside,
+                "violates": violates, "changed": list(dict.fromkeys(changed))}
+
+    def _violates(self, premise, b, rels, vals, new_rels, new_vals, world) -> bool | None:
+        if premise in vals:
+            if premise not in new_vals:
+                return None
+            return new_vals[premise] != vals[premise]
+        if premise in rels:
+            if new_rels.get(premise) == rels[premise]:
+                return False
+            if world["status"] != "consistent":
+                return None
+            with_it = _evaluate({**new_rels, "(premise)": rels[premise]}, new_vals)
+            if with_it["status"] != "consistent":
+                return True
+            try:
+                form = parse_equation(rels[premise], world["known"])[0]
+            except (Nonlinear, UndefinedValue):
+                return None
+            if form.is_zero() or (world["forms"] and entails(world["forms"], form)):
+                return False
+            return None
+        return None
+
+    def check_entailed(self, premise: str, *, answer: str, by: Sequence[str] = ()) -> dict:
+        """Check that premise's relation or value follows from other premises of answer. Records nothing.
+
+        by= names the premise relations and supplied values that entail it
+        (default: all the others). Verdicts: 'entailed', 'not entailed' (the
+        recorded relations leave it open or contradict it), 'cannot check'
+        (the premise carries no relation or value, or nonlinear relations
+        keep it open).
+        """
+        self._check_premise(premise, answer)
+        rels, vals = self._premise_system(answer)
+        result = {"premise": premise, "answer": answer, "outside": {}, "violates": None, "changed": []}
+        if premise not in rels and premise not in vals:
+            return {**result, "verdict": "cannot check", "detail": f"{premise} carries no relation or value",
+                    "summary": f"cannot check: {premise} carries no relation or value"}
+        by = list(by)
+        for n in by:
+            if n not in rels and n not in vals:
+                raise TraceError(f"{n!r} is not a premise relation or supplied value of answer {answer!r}")
+            if n == premise:
+                raise TraceError("a premise cannot entail itself")
+            if self._licensed_by(n, premise):
+                raise TraceError(f"{n!r} rests on {premise!r}, so it cannot show that {premise!r} is entailed")
+        use_rels = {k: v for k, v in rels.items()
+                    if k != premise and (not by or k in by) and not self._licensed_by(k, premise)}
+        use_vals = {k: v for k, v in vals.items()
+                    if k != premise and (not by or k in by) and not self._licensed_by(k, premise)}
+        world = _evaluate(use_rels, use_vals)
+        cited = ", ".join(by) if by else "the other premises"
+        if world["status"] != "consistent":
+            return {**result, "verdict": "cannot check", "detail": f"{cited} are {world['status']}",
+                    "summary": f"cannot check: {cited} are {world['status']}"}
+        if premise in vals:
+            ok = world["known"].get(premise) == vals[premise]
+        else:
+            try:
+                form = parse_equation(rels[premise], world["known"])[0]
+            except Nonlinear:
+                return {**result, "verdict": "cannot check", "detail": f"{premise} stays nonlinear",
+                        "summary": f"cannot check: {premise} stays nonlinear"}
+            except UndefinedValue:
+                ok = False
+            else:
+                ok = form.is_zero() or bool(world["forms"]) and entails(world["forms"], form)
+        if ok:
+            return {**result, "verdict": "entailed", "detail": f"by {cited}", "summary": f"entailed by {cited}"}
+        if world["nonlinear"]:
+            nl = ", ".join(world["nonlinear"])
+            return {**result, "verdict": "cannot check", "detail": f"the nonlinear relations {nl} may fix it",
+                    "summary": f"cannot check: the nonlinear relations {nl} may fix it"}
+        return {**result, "verdict": "not entailed", "detail": f"{cited} leave it open",
+                "summary": f"not entailed by {cited}"}
+
+    def _licensed_by(self, name: str, premise: str) -> bool:
+        """Whether name's binding rests on premise other than by merely mentioning it as a quantity: the
+        circularity test for ENTAILED. A relation that only mentions a supplied value (F = k*x for the value
+        k) does not rest on k in this sense; one registered with uses=[k], or resting on a relation that
+        rests on k, does."""
+        target = self.bindings[premise].step
+        b = self.bindings[name]
+        root = b.step
+        mentioned = set(mentioned_names(b.equation)) if b.sort == "relation" and b.equation else set()
+        skip = {self.bindings[m].step for m in mentioned if m in self.bindings and m == premise}
+        seen: set[int] = set()
+        stack = [d for d in self.steps[root].deps if d not in skip]
+        while stack:
+            i = stack.pop()
+            if i in seen:
+                continue
+            seen.add(i)
+            if i == target:
+                return True
+            stack.extend(self.steps[i].deps)
+        return False
+
+    @staticmethod
+    def _check_warnings(nm: str, status: str, chk: dict) -> list[str]:
+        out = []
+        if chk["supports"] is False:
+            out.append(f"the check of {nm} does not support {status}: {chk['summary']}")
+        elif chk["supports"] is None:
+            out.append(f"the check of {nm} could not be made: {chk['detail']}")
+        for c, prem in chk["outside"].items():
+            out.append(f"the countermodel for {nm} also changes {c}, which does not rest on {nm} (it rests on "
+                       f"{', '.join(prem) or 'no INPUT'})")
+        if chk["violates"] is False:
+            out.append(f"the countermodel for {nm} leaves {nm} true, so it is not a countermodel to it")
+        return out
 
     def _annotation(self, name: str, label: str) -> dict:
         per = self.annotations.get(name, {})
@@ -1676,6 +1952,11 @@ class Trace:
                 item = {**row, "name": nm, "kind": st.kind, "relation": st.claim, "content": self._input_content(st),
                         "status": ann.get("status", ""), "countermodel": ann.get("countermodel", ""),
                         "note": ann.get("note", "")}
+                chk = ann.get("check")
+                if chk is not None:
+                    item["check"] = chk["summary"]
+                    if st.index in cone and label == chk["answer"]:
+                        out["warnings"].extend(self._check_warnings(nm, ann["status"], chk))
                 own = self._value_from_step(nm, st.index)
                 own_value = own is not None
                 vtxt = frac(own) if own_value else ""
@@ -1870,11 +2151,13 @@ class Trace:
                       "### World commitments that feed the answer (members)", "",
                       "| Step | Name | Kind | Status | Countermodel | Content |", "|---|---|---|---|---|---|"]
             for c in led["commitments"]:
+                cm = c["countermodel"] + (f" [check: {c['check']}]" if c.get("check") else "")
                 lines.append(f"| {c['step']} | {_md(c['name'])} | {c['kind']} | {c['status']} | "
-                             f"{_md(c['countermodel'])} | {_md(c['content'])} |")
+                             f"{_md(cm.strip())} | {_md(c['content'])} |")
             sections = [
                 ("Pruned premises (feed the answer, not members)",
-                 [f"{c['step']} {c['name']}: {c['content']} ({c['why_pruned']})" for c in led["pruned"]]),
+                 [f"{c['step']} {c['name']}: {c['content']} ({c['why_pruned']})"
+                  + (f" [check: {c['check']}]" if c.get("check") else "") for c in led["pruned"]]),
                 ("Theory side that feeds the answer", [f"{t['step']} {t['op']} {t['ref']}: {t['text']}"
                                                        for t in led["theory"]]),
                 ("Step members (metalinguistic)", [f"{s['step']} {s['tag'] or s['op']}: {s['claim'] or s['text']} "
@@ -1905,8 +2188,9 @@ class Trace:
                 lines += [f"- {_md(r)}" for r in rows] or ["- none"]
             lines += ["", f"### Hypothesis set for {label} (prediction side only)", ""]
             lines += [f"- **{m['id']}** {_md(m['member'])}" for m in self.hypothesis_set(label)]
-        lines += ["", "Checks cover exact arithmetic and bookkeeping only. Physics, recognition, meaning and "
-                      "countermodels are not checked, and the observation side of a trial is not modelled.", ""]
+        lines += ["", "Checks cover exact arithmetic and bookkeeping only. A countermodel marked [check: ...] was "
+                      "re-solved from the recorded premises; physics, recognition, meaning and unmarked countermodels "
+                      "are not checked, and the observation side of a trial is not modelled.", ""]
         return "\n".join(lines)
 
     def to_record(self) -> dict:
@@ -1958,6 +2242,65 @@ class Trace:
 
 _REPLAYABLE = {"demand", "entry", "contract", "reading", "open", "input", "unknown", "deliver", "withdraw",
                "derive", "solve", "consistency", "external", "answer", "annotate"}
+
+
+def _evaluate(rels: Mapping[str, str], vals: Mapping[str, Fraction]) -> dict:
+    """Solve a relation system to a fixpoint: substitute the known values, solve the linear relations,
+    substitute what they fix into the nonlinear ones, repeat. Returns status ('consistent',
+    'inconsistent' or 'undefined'), the known values, the final linear forms and the relations still
+    nonlinear."""
+    known = dict(vals)
+    while True:
+        forms, nonlinear = [], []
+        for n, eq in rels.items():
+            try:
+                forms.append(parse_equation(eq, known)[0])
+            except Nonlinear:
+                nonlinear.append(n)
+            except UndefinedValue:
+                return {"status": "undefined", "known": known, "forms": [], "nonlinear": nonlinear, "why": n}
+        if forms and not consistent(forms):
+            return {"status": "inconsistent", "known": known, "forms": forms, "nonlinear": nonlinear, "why": ""}
+        names = sorted({x for f in forms for x in f.names()})
+        fixed = solve_linear(forms, names)["values"] if names else {}
+        new = {k: v for k, v in fixed.items() if k not in known}
+        big = [k for k, v in new.items() if _too_big(v)]
+        if big:
+            return {"status": "too large", "known": known, "forms": forms, "nonlinear": nonlinear,
+                    "why": ", ".join(big)}
+        if not new:
+            return {"status": "consistent", "known": known, "forms": forms, "nonlinear": nonlinear, "why": ""}
+        known.update(new)
+
+
+def _judge(world: dict, targets: Mapping[str, Fraction]) -> tuple[str, str]:
+    if world["status"] == "too large":
+        return "cannot check", f"the values of {world['why']} are too large to keep exactly"
+    if world["status"] == "undefined":
+        return "inconsistent", f"relation {world['why']} is undefined in this world"
+    if world["status"] == "inconsistent":
+        return "inconsistent", "the changed relations have no common solution"
+    differ = [f"{q} = {frac(world['known'][q])} (was {frac(v)})" for q, v in targets.items()
+              if q in world["known"] and world["known"][q] != v]
+    free = [q for q in targets if q not in world["known"]]
+    nl = f"; nonlinear relations not checked: {', '.join(world['nonlinear'])}" if world["nonlinear"] else ""
+    if differ:
+        return "refutes p", ", ".join(differ) + nl
+    if free:
+        if world["nonlinear"]:
+            return "cannot check", f"{', '.join(free)} left open, and nonlinear relations remain{nl}"
+        return "p does not follow", f"{', '.join(free)} left open"
+    return ("p still follows", nl[2:]) if nl else ("p still follows", "")
+
+
+def _supports(status: str, verdict: str) -> bool | None:
+    if verdict == "cannot check":
+        return None
+    if status in ("NEEDS", "REQUIRED"):
+        return verdict in ("refutes p", "p does not follow")
+    if status == "ENTAILED":
+        return verdict == "entailed"
+    return verdict == "p still follows"
 
 
 def _category(verdict: tuple[str, str, list[str]]) -> str:

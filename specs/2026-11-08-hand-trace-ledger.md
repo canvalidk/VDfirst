@@ -2,12 +2,15 @@
 
 - Source: Can's request of 8 November 2026 for "a program that might help make traces easier to produce and track step by step as the code would do but without entries".
 - Role: a recorder for traces worked by hand while the entries are unfinished. The dictionary is cited, never executed.
-- Status: Implemented (v2.3, after seven adversarial review rounds). The tests are the contract.
+- Status: Implemented (v2.4: checked statuses added to v2.3, which followed seven adversarial review rounds). The tests are the contract.
 - Related files:
   - `handtrace.py`
   - `test_handtrace.py`, `test_handtrace_regressions.py`, `test_handtrace_probes.py`, `test_handtrace_v2_review.py`,
-    `test_handtrace_v21_review.py`, `test_handtrace_v22_review.py`, `test_handtrace_v23_review.py`
+    `test_handtrace_v21_review.py`, `test_handtrace_v22_review.py`, `test_handtrace_v23_review.py`,
+    `test_handtrace_countermodels.py`
   - `handtrace_example_spring_single.py`, `handtrace_example_spring_two.py`, `handtrace_example_atwood.py`
+    (with `handtrace_example_atwood_statuses.py`), `handtrace_example_atwood_cc.py`,
+    `handtrace_example_atwood_compare.py`
 - Related ADRs: none. The module is independent of `engine.py`, `demand.py` and the workbench record.
 
 ---
@@ -87,6 +90,10 @@ Those errors are mechanical. A recorder can refuse them while the trace is writt
   - withdrawn premises;
   - undetermined unknowns, including those whose value was withdrawn. The note reads the value as of the answer: withdrawn before it (naming the premise withdrawn first), the answer's own value withdrawn after it, or a value determined only after the answer;
   - warnings (missing statuses, answers resting on a failed step or a withdrawn premise, premises supplied twice word for word, NEEDS on a premise that does not feed the answer).
+- **Checked statuses.** `annotate(..., answer=, check=)` checks a status mechanically against one answer. The answer is rebuilt from its premise relations (bound by INPUT, ENTRY, CONTRACT, READING or EXTERNAL; relations registered by DERIVE are consequences and are recomputed) and its supplied values, and the rebuilt system must reproduce the answer.
+  - For NEEDS, REQUIRED and USES the check is a countermodel: a premise relation or value replaced, relations or values removed, equations added (new names are new quantities), or, for a precondition, everything resting on the premise dropped. It is solved exactly to a fixpoint and reported as *refutes p*, *p does not follow*, *p still follows* or *inconsistent*. NEEDS and REQUIRED need the first two; USES needs the third.
+  - For ENTAILED the check is that the premise's relation or value follows from named other premises. A relation produced from the premise (registered with it in its `uses=`, directly or through other relations) does not count, so the argument cannot be circular; merely mentioning a supplied value does not make a relation rest on it here. When nonlinear relations might settle the question, the verdict is *cannot check*.
+  - Each check also says whether the countermodel falsifies the premise, and lists any changed relation that does not rest on the premise: a countermodel must keep every other premise. The ledger shows the result beside the countermodel and warns when it does not support the status.
 - **Hypothesis set.** It is the prediction side of the sort in `hypothesis_sets_from_traces`: `{p}` + one negated member commitment per answer-feeding INPUT + one "this step went wrong" member per answer-feeding DERIVE or EXTERNAL step.
 - **Output.**
   - Markdown.
@@ -97,7 +104,7 @@ Those errors are mechanical. A recorder can refuse them while the trace is writt
 ## 3. Non-Goals
 
 - Executing entries, or tokenising definitions.
-- Checking recognition, meaning or physics. Statuses and countermodels are supplied by the tracer and recorded, not checked.
+- Checking recognition, meaning or physics. Statuses are supplied by the tracer. A countermodel's arithmetic is checked when it is given as a check; whether it describes a possible world is the tracer's claim.
 - Nonlinear algebra and inequalities. They are recorded as text or as unchecked steps.
 - Units checking. Units are carried as text.
 - Deciding need. The provenance cone is an upper bound on the needed premises (C1 of the 5 November record). Statuses refine it.
@@ -154,7 +161,8 @@ See §2. The tests define the details. The worked examples encode the three hand
 **Answers and analysis**
 
 - `answer(names, text=, label=)`
-- `annotate(name, status, countermodel=, note=, answer=)`, where `answer=` scopes a status to one answer
+- `annotate(name, status, countermodel=, note=, answer=, check=)`, where `answer=` scopes a status to one answer and `check=` checks it
+- `check_countermodel(premise, answer=, replace=, remove=, add=, values=, drop_dependents=)`, `check_entailed(premise, answer=, by=)`
 - `cone(answer=)`, `ledger(answer=)`, `hypothesis_set(answer=)`
 
 **Output**
@@ -193,7 +201,7 @@ The other test files work as follows:
 - **The entry cut and editions (C5, C7).** Which results carry over when an edition changes which premises are entries.
 - **Structured addresses.** An address made of interaction, source, target, frame and instant would let the activation and value locks (S§9.2–9.3) be checked rather than asserted.
 - **Units.** Dimension checking.
-- **Countermodel checking.** A countermodel could be given as a modified relation set, and the recorder would check that p fails under it.
+- **Countermodels beyond linear algebra.** A countermodel is checked only when it can be stated as changed equations over the recorded quantities. Countermodels for premises with no relation (recognition, completeness) are checked through the relations they license, which the tracer names.
 - **Export.** Records could be exported to the engine's prediction-set schema or to the workbench record, so the website can show hand traces.
 - **Statuses.** Whether the hypothesis-set paper should adopt REQUIRED and ENTAILED.
 - **Irrational values.** A power with an irrational result is unchecked. Checking it would need exact algebraic numbers or an interval check against a stated tolerance, which belongs with C3.
