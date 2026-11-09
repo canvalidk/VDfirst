@@ -15,6 +15,7 @@ This file tracks which specs are active, historical, or only exploratory.
 | Spec | Status | Role |
 |---|---|---|
 | `2026-05-28-lazy-vd-language-draft.md` | Draft | North-star design for lazy evaluator/programming-language behaviour. |
+| `2026-11-08-hand-trace-ledger.md` | Implemented (v2.3) | Recorder and ledger for traces worked by hand while the entries are unfinished; independent of the engine. |
 
 ## Implemented Historical Specs
 

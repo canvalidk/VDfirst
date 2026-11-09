@@ -25,3 +25,6 @@ current code are the implementation contract.
 - `2026-06-10-vd-reduction.md` - draft backwards-pass reduction overlay
   spec for settled demand nodes.
 - `2026-06-10-vd-cycle-info.md` - draft trace cycle-information surface.
+- `2026-11-08-hand-trace-ledger.md` - hand-trace recorder and ledger
+  (`handtrace.py`): records hand traces step by step, checks the
+  arithmetic, and sorts each answer's premises into its hypothesis set.

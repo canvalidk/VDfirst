@@ -28,6 +28,12 @@ as the implementation/test surface.
 - `newton.py` - Newton case study entries.
 - `display.py`, `viz.py` - report rendering and graphviz output.
 - `vd_demo.py` - demo entry point.
+- `handtrace.py` - hand-trace recorder and ledger, independent of the
+  engine: frames, labelled steps, exact linear checks, visibility,
+  withdrawal, per-answer ledgers and hypothesis sets, JSON records with
+  replay. Spec: `specs/2026-11-08-hand-trace-ledger.md`.
+- `handtrace_example_*.py` - the 8 November spring and Atwood traces
+  encoded with `handtrace.py`; each is a script and a test module.
 - `test_*.py` - unit tests. Treat tests as the API contract.
 
 ## Current State
