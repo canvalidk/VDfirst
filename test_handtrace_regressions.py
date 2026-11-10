@@ -974,7 +974,8 @@ def test_r23_an_address_declaration_is_not_a_world_commitment():
     t.input(ROOT, "r", "model", "r", relation="a = 1")
     t.derive(ROOT, "a = 1", from_relations=["r"], binds="a")
     t.answer(["a"])
-    assert set(names(t.ledger()["commitments"])) == {"qn", "r"}
+    # provisional (10 November 2026): the normalization qn is pruned by kind, like a convention
+    assert set(names(t.ledger()["commitments"])) == {"r"} and set(names(t.ledger()["pruned"])) == {"qn"}
     assert not any("unknown a" in m["member"] for m in t.hypothesis_set())
 
 

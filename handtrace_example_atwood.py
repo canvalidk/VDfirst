@@ -13,7 +13,12 @@ What the encoding covers, in the source's order:
   second labelled answer 'mount' so its ledger can show what it rests on),
   system sums (T§7.4), the value lock (T§8), P1-P4 and the tolerance
   variant (T§9).
-* T§10(b) statuses and countermodels as annotations.
+* T§10(b) statuses and countermodels as annotations, each checked
+  (handtrace_example_atwood_statuses.py), for both answers.
+
+Provisional decisions of 10 November 2026 (PROVISIONAL_DECISIONS below) depart
+from the 8 November source in marked places: every such step says
+"provisional" with the decision's number. The prose source is unchanged.
 
 Step order follows the source. Where the API needs a name bound before use,
 the step text says "moved". Bracketed numbers [n] and tags (nN) are the
@@ -60,7 +65,26 @@ QUESTION = ("Two blocks, m1 = 3 kg and m2 = 5 kg, hang from a massless, inextens
             "frictionless pulley fixed to a support. Supplied g = 9.8 m/s². Find the acceleration of "
             "each mass and the tension in the string.")
 
+# Provisional decisions of 10 November 2026 (Can). Each departs from the 8 November source where noted, and
+# may be revised. They are applied below and marked 'provisional' where they change a step.
+PROVISIONAL_DECISIONS = {
+    "P1 owners of shared clauses": "the 'same g at both blocks / uniform field' clause belongs to the weight "
+        "premises w1, w2 (W5), so g is the number and its free-fall reading; verticality belongs to pull1, pull2 "
+        "(W9), so the string admissions admS1, admS2 keep attachment and tautness only",
+    "P2 readings recorded as relations": "the free-fall reading of g is recorded per block as READING ff_k "
+        "(fG_k = -m_k*g), on which P-EQV rests; E-a and E-b carry relations (T2 - T1 + Ft = 0 and Ft = 0), so "
+        "P-EQV and M-EQ can be checked as ENTAILED",
+    "P3 normalizations": "norm and d3bind state the question, not the world; the recorder prunes kind "
+        "'normalization' like a convention, so they are not in H",
+    "P4 Q1 and M-EQ": "both ENTAILED by the ideal string; Q1 now rests on E-a. M-EQ is confirmed; Q1 is not, "
+        "because the recorded E-a relation is the along-string form of the zero-net-force rule and Q1 is its "
+        "ŷ form",
+    "P5 the coupled-constraint coupling": "the CC recording keeps a1 + a2 = 0 as one INPUT, as that trace "
+        "states it; the split form used here is preferred going forward",
+}
+
 EDITION = {
+    "provisional decisions (10 November 2026)": "; ".join(f"{k}: {v}" for k, v in PROVISIONAL_DECISIONS.items()),
     "D": "Design 2.1 Draft 1 entries K1-K16, E1-E11 (compiled 2026-05-20), VD-Newton HEAD 61afb9ec",
     "Force-Sum": "ratified names and minimum typed relation (07_design_2_1/CURRENT_STATE.md)",
     "contracts": "NEWTON_ENTRY_STRUCTURE_SYNTHESIS_2026-11-08.md, sha256 7ca588f2...af2af3",
@@ -180,7 +204,8 @@ def walk_block(t: Trace, k: int, mass: int) -> None:
             "uniform-field model holds", uses=["t0"])
     t.input(di, f"admS{k}", "recognition", f"[{i}] admit i_S{k}: string attachment (constraint mechanism), "
             f"participants {{string σ, {B}}}, interface binding σ's end {k}; activation: {B} is attached to "
-            f"end {k}, σ is intact and taut at t0, the segment above {B} is vertical", uses=["t0"])
+            f"end {k}, σ is intact and taut at t0 (provisional P1: the source's 'segment above {B} is vertical' "
+            f"clause is owned by pull{k}, W9)", uses=["t0"])
     t.contract(di, "C-ADM", f"[{i}] in context (t0, R): admission commits the account to these activation "
                "conditions, under these bindings, at t0", source="S§2.1, S§9.2, S§12.2", binds=f"cadm{k}",
                uses=[f"admG{k}", f"admS{k}"])
@@ -217,8 +242,9 @@ def walk_block(t: Trace, k: int, mass: int) -> None:
               "a formula", address=f"(i_G{k}, {B}, t0)", ref="C-CM", unit="N", uses=[f"admG{k}"])
     if first:
         t.input(dg, "g", "value/model", "[9] g = 49/5 m/s², the supplied 9.8 taken as exact, read as the local "
-                "free-fall acceleration, uniform over the region of motion (moved before the weight INPUT, whose "
-                "relation mentions g)", value="9.8", unit="m/s^2")
+                "free-fall acceleration (moved before the weight INPUT, whose relation mentions g; provisional P1: "
+                "the source's 'uniform over the region of motion' clause is owned by w1, w2, W5)", value="9.8",
+                unit="m/s^2")
     else:
         t.deliver(D, "g", text="[16] the same g at both blocks (W5). It lands at D2: a delivery passes from a "
                   "frame's parent")
@@ -226,12 +252,19 @@ def walk_block(t: Trace, k: int, mass: int) -> None:
               "the kind (S§3.4); it supplies no value", address=f"μ({B})", ref="C-CM", unit="kg",
               uses=[f"admG{k}"])
     t.input(dg, f"w{k}", "model", f"[{g_}] near-surface uniform-field weight, i_G{k} a binary interaction with E: "
-            f"f(i_G{k} → {B}) = −μ({B})·g ŷ" + ("" if first else "; the same g at both blocks"),
+            f"f(i_G{k} → {B}) = −μ({B})·g ŷ; the field is uniform over the region of motion, so the field at {B} "
+            "is the same g as at the other block (provisional P1: this clause is owned here)",
             relation=f"fG{k} = -mu{k}*g", uses=[f"admG{k}", "axis"])
     t.deliver(df, f"m{k}", text=f"[{g_}] binding re-delivered for P-EQV: m({B}) = {mass} kg. It lands at d{k}.1, "
               "the caller of this demand: a delivery straight to the weight slot is refused")
+    t.reading(dg, f"provisional P2: the free-fall reading of g applied to {B}. Under gravity alone {B} would have "
+              f"acceleration −g ŷ, so through E8's quotient f(i_G{k} → {B}) = −m({B})·g ŷ. With the weight "
+              f"relation w{k} this gives μ({B}) = m({B}): P-EQV follows. It rests on w{k}'s uniform-field clause: "
+              f"the supplied g is the free-fall acceleration at {B}. Not a step of the source, which states the "
+              "reading in g's INPUT only", binds=f"ff{k}", relation=f"fG{k} = -m{k}*g",
+              uses=["g", f"w{k}", f"admG{k}"])
     t.input(dg, f"peqv{k}", "identity/model", f"[{g_}] P-EQV: μ({B}) is the quantity at address m({B})",
-            relation=f"mu{k} = m{k}")
+            relation=f"mu{k} = m{k}", uses=[f"ff{k}"])
     t.derive(dg, f"fG{k} = -{mass}*49/5", from_relations=[f"w{k}", f"peqv{k}"], binds=f"fG{k}", tag=f"(n{k})",
              text=f"= −{weight} ŷ N")
 
@@ -290,11 +323,17 @@ def to_answer(t: Trace) -> None:
 
     # T§5.1 [19] equal magnitudes, at D3
     t.deliver_many("D3", ["T1", "T2"], text="[19] the member unknowns M-EQ relates")
-    t.input("D3", "Ea", "model", "E-a: the string's mass is negligible (stated under 'What M-EQ needs'; moved "
-            "before M-EQ so it can cite it)")
-    t.input("D3", "Eb", "model", "E-b: no net tangential force from the pulley on the string (frictionless "
-            "contact, or a freely turning pulley on a frictionless axle with negligible I/r²); reading the "
-            "exercise's 'frictionless pulley' as also negligible inertia is a recorded normalization")
+    t.unknown("D3", "Ft", "net tangential force of the pulley on σ, positive toward end 2 (provisional P2: "
+              "introduced so that E-a and E-b can carry relations; the source has no such address)",
+              address="tangential(pulley → σ, t0)", label="READING", unit="N", uses=["T1", "T2"])
+    t.input("D3", "Ea", "model", "E-a: the string's mass is negligible, so the forces on it along its length "
+            "balance: T2 − T1 + F_t = 0 (stated under 'What M-EQ needs'; moved before M-EQ so it can cite it; "
+            "provisional P2: the relation is this recording's)", relation="T2 - T1 + Ft = 0")
+    t.input("D3", "Eb", "model", "E-b: no net tangential force from the pulley on the string, F_t = 0 "
+            "(frictionless contact, or a freely turning pulley on a frictionless axle with negligible I/r²); "
+            "reading the exercise's 'frictionless pulley' as also negligible inertia is a recorded "
+            "normalization (provisional P2: the relation is this recording's)", relation="Ft = 0")
+    t.derive("D3", "Ft = 0", from_relations=["Eb"], binds="Ft", tag="provisional P2")
     t.input("D3", "meq", "model", "[19] M-EQ (model/idealisation): T1 = T2 =: T", relation="T1 = T2",
             uses=["Ea", "Eb"])
     t.unknown("D3", "T", "the one shared tension, T1 = T2 =: T; it answers D3", address="T(σ over the pulley, t0)",
@@ -416,9 +455,12 @@ def consequences(t: Trace) -> None:
         t.unknown(ROOT, f"c{i}", f"ŷ-component of i_{i}'s counterpart, on {recipient}; C-ID keeps E's and σ's two "
                   "counterparts at distinct addresses", address=f"(i_{i}, {recipient}, t0)", ref="C-PAIR", unit="N",
                   uses=["cpair", "sigma1"])
+        vertical = [f"pull{i[1]}"] if i[0] == "S" else []  # provisional P1: ŷ-components of σ's counterparts
         t.contract(ROOT, "C-PAIR", f"T§7.2 i_{i}'s counterpart is the negation of its force on the block (by the "
-                   "quoting convention)", source="S§10.1, S§10.2", binds=f"pair{i}", relation=f"c{i} = -{force}",
-                   uses=["cpair", "cquote"])
+                   "quoting convention)" + ("; its ŷ-component is −T only for a vertical segment (W9)"
+                                             if vertical else ""),
+                   source="S§10.1, S§10.2", binds=f"pair{i}", relation=f"c{i} = -{force}",
+                   uses=["cpair", "cquote"] + vertical)
         t.derive(ROOT, f"c{i} = {value}", from_relations=[f"pair{i}"], binds=f"c{i}", tag="T§7.2 table")
 
     # T§7.3 the string is not a material object of E8-E10; the mount load under Q1-Q7
@@ -442,8 +484,9 @@ def consequences(t: Trace) -> None:
     t.unknown(ROOT, "fUm", "ŷ-component of i_U's counterpart, on the mount: the mount load",
               address="(i_U, mount, t0)", ref="C-PAIR", unit="N", uses=["Q7"])
     t.input(ROOT, "Q1", "model", "T§7.3 (Q1) the massless-link rule: the net force on σ is zero, summed over "
-            "Q6's set (Q1 is listed first in the source; moved after Q2-Q7, whose addresses it needs)",
-            relation="cS1 + cS2 + fPs = 0", uses=["Q6"])
+            "Q6's set (Q1 is listed first in the source; moved after Q2-Q7, whose addresses it needs; "
+            "provisional P4: it rests on E-a, the negligible mass that makes σ's net force zero)",
+            relation="cS1 + cS2 + fPs = 0", uses=["Q6", "Ea"])
     t.entry(ROOT, "E9", Q["E9"], binds="e9", text="T§7.3 (Q5) E9 gives zero net force for a positive-mass pulley at "
             "zero acceleration")
     t.input(ROOT, "Q5", "model", "T§7.3 (Q5) the pulley's net force is zero: it is at rest (K-c) and has positive "
@@ -882,8 +925,9 @@ def test_post_answer_steps_do_not_feed_p_and_the_mount_load_rests_on_q1_q7():
     mount = _placements(t.ledger(answer="mount"))
     for q in ("Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7"):
         assert p[q][0] == "out"
-        # Q5 is ENTAILED for mount (by K-c, Q4 and Q6 through E9), so it is pruned; the rest are members
-        assert mount[q][0] == ("pruned" if q == "Q5" else "member")
+        # Q5 is ENTAILED for mount (by K-c, Q4 and Q6 through E9) and, provisionally (P4), so is Q1 (by E-a):
+        # both are pruned; the rest are members
+        assert mount[q][0] == ("pruned" if q in ("Q1", "Q5") else "member")
     # every premise of either answer has a status scoped to that answer
     assert not any("no status yet" in w for lb in ("p", "mount") for w in t.ledger(answer=lb)["warnings"])
 
@@ -913,25 +957,49 @@ def test_every_premise_of_p_and_mount_has_a_checked_status():
     for lb, table in (("p", P_STATUSES), ("mount", MOUNT_STATUSES)):
         led = t.ledger(answer=lb)
         feeding = {c["name"] for c in led["commitments"] + led["pruned"]}
-        assert feeding == set(table), (lb, feeding ^ set(table))
-        assert all("check" in c for c in led["commitments"] + led["pruned"])
+        # provisional P3: norm states the question; it is pruned by kind and takes no status
+        assert feeding - {"norm"} == set(table), (lb, feeding ^ set(table))
+        assert all("check" in c for c in led["commitments"] + led["pruned"] if c["name"] != "norm")
+        norm = next(c for c in led["pruned"] if c["name"] == "norm")
+        assert norm["why_pruned"] == "kind normalization is not a claim about the world"
 
 
 def test_the_only_check_warnings_are_the_recorded_text_gaps():
-    """What the checks cannot confirm, and why: P-EQV's free-fall reading of g, M-EQ's E-a and E-b, M-KIN's
-    K-a to K-e and Q5's E9 argument are all recorded as text; pairS1 and pairS2 (the counterparts on σ) do not
-    cite the vertical segments they presuppose."""
+    """What the checks still cannot confirm after the provisional decisions of 10 November, and why: M-KIN is a
+    relation between functions, recorded as text; Q5's E9 argument is text; Q1 is the ŷ form of the
+    zero-net-force rule, while E-a's recorded relation is its along-string form."""
     _need_entries()
     t = build()
-    assert t.ledger("p")["warnings"] == [
-        "the check of peqv1 does not support ENTAILED: not entailed by w1, g",
-        "the check of peqv2 does not support ENTAILED: not entailed by w2, g",
-        "the check of meq does not support ENTAILED: not entailed by the other premises",
-        "the check of mkin could not be made: mkin carries no relation or value"]
-    mount = t.ledger("mount")["warnings"]
-    assert len(mount) == 7
-    assert sum(w.startswith("the countermodel for pull") and "pairS" in w for w in mount) == 2
-    assert "the check of Q5 does not support ENTAILED: not entailed by the other premises" in mount
+    assert t.ledger("p")["warnings"] == ["the check of mkin could not be made: mkin carries no relation or value"]
+    assert t.ledger("mount")["warnings"] == [
+        "the check of mkin could not be made: mkin carries no relation or value",
+        "the check of Q1 does not support ENTAILED: not entailed by the other premises",
+        "the check of Q5 does not support ENTAILED: not entailed by the other premises"]
+
+
+def test_the_provisional_decisions_are_recorded_and_do_their_work():
+    _need_entries()
+    t = build()
+    assert set(PROVISIONAL_DECISIONS) == {"P1 owners of shared clauses", "P2 readings recorded as relations",
+                                          "P3 normalizations", "P4 Q1 and M-EQ",
+                                          "P5 the coupled-constraint coupling"}
+    assert "provisional decisions (10 November 2026)" in t.to_record()["edition"]
+    led = {c["name"]: c for c in t.ledger("p")["commitments"] + t.ledger("p")["pruned"]}
+    # P2: P-EQV and M-EQ are confirmed as ENTAILED, and E-a alone does not give M-EQ
+    assert led["peqv1"]["check"] == "entailed by w1, g, ff1" and led["peqv2"]["check"] == "entailed by w2, g, ff2"
+    assert led["meq"]["check"] == "entailed by Ea, Eb"
+    assert t.check_entailed("meq", answer="p", by=["Ea"])["verdict"] == "not entailed"
+    assert t.check_entailed("peqv1", answer="p", by=["w1", "g"])["verdict"] == "not entailed"
+    # P1: the field-strength world (CM3) is a countermodel to g's reading clause; alone on P-EQV it is no world
+    cm3 = t.check_countermodel("g", answer="p", replace={"ff2": "fG2 = -6*g", "peqv2": "mu2 = 6"})
+    assert cm3["summary"].startswith("refutes p: a1 = 147/40 (was 49/20)") and cm3["outside"] == {}
+    assert t.check_countermodel("peqv2", answer="p", replace={"peqv2": "mu2 = 6"})["verdict"] == "inconsistent"
+    # P1: a field that differs at B1 breaks only w1 (its reading ff1 changes with it); verticality is pull's
+    w1 = t.check_countermodel("w1", answer="p", **P_STATUSES["w1"][3])
+    assert w1["verdict"] == "refutes p" and w1["outside"] == {} and w1["violates"] is True
+    assert "vertical" not in t.bindings["admS1"].text.split("provisional")[0]
+    # P3: the normalizations are pruned by kind
+    assert {"norm", "d3bind"} <= {c["name"] for c in t.ledger("p")["pruned"]}
 
 
 def test_the_source_countermodels_are_reproduced_by_the_checked_statuses():
@@ -965,6 +1033,8 @@ EXPECTED_DISAGREEMENTS = {
     "W16 haze1 kind", "W16 haze2 kind",
     "W18 cquote placement",
     "norm no row", "d3bind no row", "J no row",
+    # provisional decisions of 10 November: the free-fall reading ff_k and the address F_t are this recording's
+    "(a) READING provisional in p", "(a) READING unknown in p",
     "(c) T§4 pending", "(c) (n9)", "(c) (n10)", "(c) (n11)", "(c) (n12)", "(c) (n13)", "(c) (n14)", "(c) (n15)",
     "(c) (n16)", "(c) (n17)", "(c) (n18)", "(c) (n19)", "(c) (n20)",
     "(c) [11] RETURN (partial) tool", "(c) [18] RETURN (partial) tool", "(c) [22] hence tool", "(c) [23] input tool",

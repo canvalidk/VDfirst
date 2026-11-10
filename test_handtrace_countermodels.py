@@ -183,9 +183,9 @@ def at():
 @pytest.mark.parametrize("premise,spec,a1", [
     ("m1", {"replace": {"m1": 4}}, "49/45"),                                                       # CM1
     ("rin", {"replace": {"e8rel1": "a1 = Fnet1/m1 - 1", "e8rel2": "a2 = Fnet2/m2 - 1"}}, "27/10"),  # CM2
-    ("Eb", {"replace": {"meq": "T2 = T1 + 1*a1"}}, "98/45"),                                        # CM4
-    ("Eb", {"replace": {"meq": "T2 = T1 + 4/5"}}, "47/20"),                                         # CM5 descending
-    ("Eb", {"replace": {"meq": "T2 = T1 - 4/5"}}, "51/20"),                                         # CM5 ascending
+    ("Eb", {"replace": {"Eb": "Ft = -1*a1"}, "remove": ["meq"]}, "98/45"),                          # CM4
+    ("Eb", {"replace": {"Eb": "Ft = -4/5"}, "remove": ["meq"]}, "47/20"),                           # CM5 descending
+    ("Eb", {"replace": {"Eb": "Ft = 4/5"}, "remove": ["meq"]}, "51/20"),                            # CM5 ascending
     ("comp1", {"replace": {"sum1": "Fnet1 = fG1 + T1 - 1"}}, "93/40"),                              # CM6
     ("m2", {"replace": {"m2": 6}}, "49/15"),
     ("comp2", {"replace": {"sum2": "Fnet2 = fG2 + T2 - 1"}}, "103/40"),
@@ -195,10 +195,14 @@ def test_the_source_countermodels_are_reproduced(at, premise, spec, a1):
     assert r["verdict"] == "refutes p" and r["detail"].startswith(f"a1 = {a1} (was 49/20)") and r["outside"] == {}
 
 
-def test_p_eqv_is_not_entailed_by_the_recorded_weight_and_g(at):
+def test_p_eqv_is_entailed_only_with_the_recorded_free_fall_reading(at):
+    """Provisional decision P2 (10 November 2026): the free-fall reading of g is recorded as READING ff_k."""
     assert at.check_entailed("peqv1", answer="p", by=["w1", "g"])["verdict"] == "not entailed"
-    cm3 = at.check_countermodel("peqv2", answer="p", replace={"peqv2": "mu2 = 6"})
+    assert at.check_entailed("peqv1", answer="p", by=["w1", "g", "ff1"])["verdict"] == "entailed"
+    # CM3 (g as a field strength, μ(B2) = 6 kg) is a countermodel to g's reading, not to P-EQV alone
+    cm3 = at.check_countermodel("g", answer="p", replace={"ff2": "fG2 = -6*g", "peqv2": "mu2 = 6"})
     assert cm3["summary"].startswith("refutes p: a1 = 147/40 (was 49/20)")
+    assert at.check_countermodel("peqv2", answer="p", replace={"peqv2": "mu2 = 6"})["verdict"] == "inconsistent"
 
 
 # -- final review of the checker -------------------------------------------------------------------------------

@@ -243,9 +243,10 @@ def test_consequences_follow_the_answer_in_source_order():
 def test_summation_as_written_keeps_the_spring_route():
     led = build().ledger()
     fed = {c["name"] for c in led["commitments"]}
-    assert {"k", "e", "m_A", "H", "s_id", "i_s_id", "support", "activation", "complete", "exact", "q_norm",
+    assert {"k", "e", "m_A", "H", "s_id", "i_s_id", "support", "activation", "complete", "exact",
             "model1d", "R_inertial", "A_body"} == fed
-    assert {c["name"] for c in led["pruned"]} == {"axis", "quote_conv"}  # conventions are not members
+    # conventions are not members; nor, provisionally (10 November 2026), is the normalization q_norm
+    assert {c["name"] for c in led["pruned"]} == {"axis", "quote_conv", "q_norm"}
     assert [s["tag"] for s in led["step_members"]] == ["multiplication", "summation", "division"]
     theory = " ".join(r["ref"] for r in led["theory"])
     for ref in ("C-member", "C-activation-lock", "Force-Sum", "C-spring-dispatch", "E8"):
@@ -262,9 +263,9 @@ def test_ledger_lists_the_consequences_outside_the_answer():
     for key in ("conflicts", "unchecked", "solve_reports", "withdrawn", "undetermined"):
         assert led[key] == [], key
     assert len(led["open"]) == 3
-    assert len(led["warnings"]) == 1 and led["warnings"][0].startswith("14 commitment(s) have no status yet")
+    assert len(led["warnings"]) == 1 and led["warnings"][0].startswith("13 commitment(s) have no status yet")
     h = t.hypothesis_set()
-    assert len(h) == 1 + 14 + 3 and h[0]["member"] == "the prediction holds: a_A = 1 m/s^2"
+    assert len(h) == 1 + 13 + 3 and h[0]["member"] == "the prediction holds: a_A = 1 m/s^2"  # q_norm is pruned
 
 
 def test_value_lock_reuse_has_no_independent_content():

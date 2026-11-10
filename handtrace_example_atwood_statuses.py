@@ -36,51 +36,46 @@ P_STATUSES = {'pp1': ['REQUIRED',
  'admG1': ['NEEDS',
            "W5 ('drop either interaction and a changes'): i_G1 not admitted; B1's sum has only the string member, "
            'and the weight relation and P-EQV for B1 lapse.',
-           "W5. sum1, w1 and peqv1 all rest on admG1. This world also breaks the 'same g at both blocks' and "
-           "'uniform over the region of motion' clauses, which are recorded as text in g's INPUT (and in w2's); "
-           'the checker cannot see text, so this countermodel holds only if those clauses are read as part of W5 '
-           'rather than of g.',
-           {'replace': {'sum1': 'Fnet1 = T1'}, 'remove': ['w1', 'peqv1']}],
+           'W5. sum1, w1 and peqv1 all rest on admG1.',
+           {'replace': {'sum1': 'Fnet1 = T1'}, 'remove': ['w1', 'ff1', 'peqv1']}],
  'admG2': ['NEEDS',
            "W5: i_G2 not admitted; B2's sum has only the string member, and w2, peqv2 lapse.",
-           "W5. sum2, w2 and peqv2 all rest on admG2. This world also breaks the 'same g at both blocks' and "
-           "'uniform over the region of motion' clauses, which are recorded as text in g's INPUT (and in w2's); "
-           'the checker cannot see text, so this countermodel holds only if those clauses are read as part of W5 '
-           'rather than of g.',
-           {'replace': {'sum2': 'Fnet2 = T2'}, 'remove': ['w2', 'peqv2']}],
+           'W5. sum2, w2 and peqv2 all rest on admG2.',
+           {'replace': {'sum2': 'Fnet2 = T2'}, 'remove': ['w2', 'ff2', 'peqv2']}],
  'w1': ['NEEDS',
         "W5 ('a g that differs between the blocks changes a'), new numbers here: the field at B1 is g + 1/10 m/s² "
         'while g = 49/5 stays the value at B2.',
         "W5. Caveat: g's INPUT text also says g is 'uniform over the region of motion', which this world "
-        "falsifies; the checker cannot see text. This world also breaks the 'same g at both blocks' and 'uniform "
-        "over the region of motion' clauses, which are recorded as text in g's INPUT (and in w2's); the checker "
-        'cannot see text, so this countermodel holds only if those clauses are read as part of W5 rather than of '
-        'g.',
-        {'replace': {'w1': 'fG1 = -mu1*(g + 1/10)'}}],
+        "falsifies; the checker cannot see text. Provisional (10 November 2026, P1): the 'same g / uniform field' "
+        'clause is owned by w1, so this world breaks only w1. The free-fall reading ff1 rests on that clause and '
+        'changes with it.',
+        {'replace': {'w1': 'fG1 = -mu1*(g + 1/10)', 'ff1': 'fG1 = -m1*(g + 1/10)'}}],
  'w2': ['NEEDS',
         'W5, new numbers here: the field at B2 is g + 1/10 m/s² while g = 49/5 stays the value at B1.',
-        "W5. Same caveat as w1 (g's text says uniform). This world also breaks the 'same g at both blocks' and "
-        "'uniform over the region of motion' clauses, which are recorded as text in g's INPUT (and in w2's); the "
-        'checker cannot see text, so this countermodel holds only if those clauses are read as part of W5 rather '
-        'than of g.',
-        {'replace': {'w2': 'fG2 = -mu2*(g + 1/10)'}}],
- 'g': ['NEEDS', "W6 ('changing g scales a'), new number here: g = 10 m/s².", 'W6.', {'replace': {'g': 10}}],
+        "W5. Same caveat as w1 (g's text says uniform). Provisional (10 November 2026, P1): the 'same g / uniform "
+        "field' clause is owned by w2, so this world breaks only w2. The free-fall reading ff2 rests on that "
+        'clause and changes with it.',
+        {'replace': {'w2': 'fG2 = -mu2*(g + 1/10)', 'ff2': 'fG2 = -m2*(g + 1/10)'}}],
+ 'g': ['NEEDS',
+       "W6 ('changing g scales a'), new number here: g = 10 m/s².",
+       'W6. Provisional (10 November 2026, P1): g is the number and its free-fall reading. The reading clause has '
+       'its own countermodel, CM3: g read as a field strength with μ(B2) = 6 kg (ff2 and peqv2, which rest on g, '
+       'changed) gives a = 147/40, checked in the tests.',
+       {'replace': {'g': 10}}],
  'peqv1': ['ENTAILED',
            '',
            'W7: μ(B1) = m(B1) follows from the uniform-field weight w1 and g read as the local free-fall '
-           "acceleration. That reading is recorded only as text in g's INPUT, so the check finds P-EQV not "
-           'entailed by the recorded w1 and g, and the ledger warns: recording ff1: fG1 = -m1*g would make it '
-           'check. Under a field-strength reading of g it is NEEDS: μ(B1) = 4 kg with m(B1) = 3 kg gives a = 49/40 '
-           '(computed here; CM3 is the B2 case).',
-           {'entailed_by': ['w1', 'g']}],
+           'acceleration. Provisional (10 November 2026, P2): that reading is now recorded as the READING ff1 (fG1 '
+           '= -m1*g), so the entailment is confirmed. Under a field-strength reading of g, P-EQV fails; that world '
+           "is a countermodel to g's reading clause (see g).",
+           {'entailed_by': ['w1', 'g', 'ff1']}],
  'peqv2': ['ENTAILED',
            '',
            'W7: μ(B2) = m(B2) follows from the uniform-field weight w2 and g read as the local free-fall '
-           "acceleration. That reading is recorded only as text in g's INPUT, so the check finds P-EQV not "
-           'entailed by the recorded w2 and g, and the ledger warns: recording ff2: fG2 = -m2*g would make it '
-           'check. Under a field-strength reading of g it is NEEDS: CM3, μ(B2) = 6 kg with m(B2) = 5 kg, gives a = '
-           '147/40.',
-           {'entailed_by': ['w2', 'g']}],
+           'acceleration. Provisional (10 November 2026, P2): that reading is now recorded as the READING ff2 (fG2 '
+           '= -m2*g), so the entailment is confirmed. Under a field-strength reading of g, P-EQV fails; that world '
+           "is a countermodel to g's reading clause (see g).",
+           {'entailed_by': ['w2', 'g', 'ff2']}],
  'admS1': ['REQUIRED',
            '',
            'W8: without admission there is a different account. Check: drop everything resting on admS1.',
@@ -90,31 +85,33 @@ P_STATUSES = {'pp1': ['REQUIRED',
            "W9 ('angled segments change the ŷ-components'), new number here: the segment above B1 at an angle with "
            "cos θ = 4/5, so the string's ŷ-component on B1 is (4/5)·T1.",
            'W9 (verticality); T ≥ 0 is used only at [25]. Only sum1 is changed; dkin also rests on pull1 and an '
-           "angled segment would change it too. The world also falsifies the 'segment above Bk is vertical' clause "
-           "of admSk's activation, which is text: verticality is stated in both admSk and pullk.",
+           'angled segment would change it too. Provisional (10 November 2026, P1): verticality is owned by pull1; '
+           'the string admission no longer states it.',
            {'replace': {'sum1': 'Fnet1 = fG1 + 4/5*T1'}}],
  'pull2': ['NEEDS',
            'W9, new number here: cos θ = 4/5 above B2, ŷ-component (4/5)·T2.',
-           "W9 (verticality). Only sum2 is changed. The world also falsifies the 'segment above Bk is vertical' "
-           "clause of admSk's activation, which is text: verticality is stated in both admSk and pullk.",
+           'W9 (verticality). Only sum2 is changed. Provisional (10 November 2026, P1): verticality is owned by '
+           'pull2; the string admission no longer states it.',
            {'replace': {'sum2': 'Fnet2 = fG2 + 4/5*T2'}}],
  'Ea': ['NEEDS',
         "W10 ('a heavy chain: the two end forces differ'), new numbers here: hanging chain portions of 1/10 kg "
         "above B1 and 1/5 kg above B2, frictionless contact (E-b kept), negligible arc mass; each segment's top "
         'tension is its end force plus its mass times (g + its acceleration), and the two top tensions are equal.',
-        'W10 (via M-EQ). meq rests on Ea.',
-        {'replace': {'meq': 'T1 + 1/10*(g + a1) = T2 + 1/5*(g + a2)'}}],
+        "W10 (via M-EQ). meq rests on Ea. Provisional (10 November 2026, P2): the countermodel is written on E-a's "
+        'own relation, with M-EQ, which rests on it, dropped.',
+        {'replace': {'Ea': 'T2 + 1/5*(g + a2) - T1 - 1/10*(g + a1) + Ft = 0'}, 'remove': ['meq']}],
  'Eb': ['NEEDS',
         'CM4 (W11): pulley inertia I/r² = 1 kg, so T2 − T1 = 1·a1; the source gives 9a = 2·49/5, a = 98/45. (CM5, '
         'axle friction 0.8 N at the rim, is checked as an extra: 47/20 descending, 51/20 ascending.)',
-        'W11, CM4 (CM5 in the extras). meq rests on Eb.',
-        {'replace': {'meq': 'T2 = T1 + 1*a1'}}],
+        'W11, CM4 (CM5 in the extras). meq rests on Eb. Provisional (10 November 2026, P2): the countermodel is '
+        "written on E-b's own relation (F_t = −(I/r²)·a1), with M-EQ, which rests on it, dropped.",
+        {'replace': {'Eb': 'Ft = -1*a1'}, 'remove': ['meq']}],
  'meq': ['ENTAILED',
          '',
-         'No T§10(b) row: M-EQ is replaced by its premise set E-a ∧ E-b (W10, W11). Ea and Eb carry no relation, '
-         'so the recorder cannot confirm the entailment and the ledger warns. CM4 written on meq itself (T2 = T1 + '
-         'a1) refutes p (a = 98/45), but that world falsifies E-b, so it is a countermodel to Eb.',
-         {'entailed_by': []}],
+         'No T§10(b) row: M-EQ is replaced by its premise set E-a ∧ E-b (W10, W11). Provisional (10 November 2026, '
+         'P2): E-a (T2 − T1 + F_t = 0) and E-b (F_t = 0) now carry relations, so the entailment is confirmed; E-a '
+         'alone does not entail it.',
+         {'entailed_by': ['Ea', 'Eb']}],
  'Ka': ['NEEDS',
         "W12 ('an elastic cord at a changing stretch: in general a1 + a2 ≠ 0'): the length L accelerates, L'' = "
         "Ldd free, so y1'' + y2'' = −L''.",
@@ -176,17 +173,11 @@ P_STATUSES = {'pp1': ['REQUIRED',
           'the axis, so a full reversal changes the components. axis is pruned by kind (convention) whatever its '
           'status.',
           {'replace': {'rd1': 'a1 = -y1dd', 'rd2': 'a2 = -y2dd'}}],
- 'norm': ['REQUIRED',
-          '',
-          'No T§10(b) row (T§1 normalization). Proposed: REQUIRED, a precondition: it makes a1, a2 the demanded '
-          'quantities E8 and E7 are applied to (e8rel1, e8rel2, rd1, rd2 rest on it). norm is of kind '
-          "'normalization', which the source treats as part of the question (T§1) rather than a world premise; "
-          'whether it belongs in H(p) is open.',
-          {'drop_dependents': True}],
  'd3bind': ['USES',
             '',
             'No T§10(b) row ([7] D3 := |f(i_S1 → B1)|). Proposed: USES, a recorded choice of end: binding D3 at '
-            "B2's end (T = T2) leaves p unchanged under M-EQ. Also of kind 'normalization' (see norm).",
+            "B2's end (T = T2) leaves p unchanged under M-EQ. Provisional (10 November 2026, P3): a normalization "
+            'states the question, so it is pruned by kind whatever its status.',
             {'replace': {'t9': 'T = T2'}}],
  'J': ['REQUIRED',
        '',
@@ -195,159 +186,139 @@ P_STATUSES = {'pp1': ['REQUIRED',
        "around t0 the K12/E7 value y_k''(t0) and the differentiated M-KIN do not apply.",
        {'drop_dependents': True}]}
 
-MOUNT_STATUSES = {'norm': ['REQUIRED',
-          'Without the normalization there are no demands D1, D2 at (Bk, t0, R), so E8 and the [22] reading are '
-          'not applied to the blocks (e8rel1, e8rel2, rd1, rd2 dropped). Checker: p does not follow: fUm left '
-          'open. New here (no T§10(b) row).',
-          'no T§10(b) row',
-          {'drop_dependents': True}],
- 'persist': ['NEEDS',
+MOUNT_STATUSES = {'persist': ['NEEDS',
              "Persistence fails at [15]: B2's gravity member is re-identified with i_G1 (the merge C-ID guards "
-             "against), so B2's sum reads f(i_G1 → B1): Fnet2 = fG1 + T2. Checker: refutes p: fUm = -294/5 (was "
-             "-147/2). W17 (structural). The source's own W17 countermodel (B2's mass put into B1's account) gives "
-             "refutes p: fUm = -98 (was -147/2) but changes relations outside persist's recorded provenance: "
-             '{"peqv1": ["admG1", "m1", "peqv1"], "e8rel1": ["axis", "m1", "norm", "pp1", "rin"]}.',
+             "against), so B2's sum reads f(i_G1 → B1): Fnet2 = fG1 + T2. W17 (structural). The source's own W17 "
+             "countermodel (B2's mass put into B1's account) gives refutes p: fUm = -98 (was -147/2) but changes "
+             'relations (peqv1, e8rel1) that the recorded provenance does not link to persist.',
              'W17; T§10(b) status for p: NEEDS (structural)',
              {'replace': {'sum2': 'Fnet2 = fG1 + T2'}}],
  'pp1': ['REQUIRED',
          'W1: B1 is not a material object represented by a point-particle, so E8, the [22] reading and the '
-         'attachment coupling do not apply to it (e8rel1, dkin, rd1 dropped). Checker: p does not follow: fUm left '
-         'open.',
+         'attachment coupling do not apply to it (e8rel1, dkin, rd1 dropped).',
          'W1; T§10(b) status for p: REQUIRED',
          {'drop_dependents': True}],
  'transl1': ['NEEDS',
              'W2: B1 rocks about a horizontal axis with its centre of mass offset from the attachment, so its '
              "representative's ŷ-acceleration exceeds the attachment point's by 1/2 m/s² at t0 (rd1: a1 = y1dd + "
-             '1/2); M-KIN still constrains the attachment points. Checker: refutes p: fUm = -603/8 (was -147/2).',
+             '1/2); M-KIN still constrains the attachment points.',
              'W2; T§10(b) status for p: NEEDS',
              {'replace': {'rd1': 'a1 = y1dd + 1/2'}}],
  'm1': ['NEEDS',
-        'CM1 (W3) carried to mount: m(B1) = 4 kg. Checker: refutes p: fUm = -784/9 (was -147/2).',
+        'CM1 (W3) carried to mount: m(B1) = 4 kg.',
         'W3; T§10(b) status for p: NEEDS',
         {'replace': {'m1': 4}}],
  'rin': ['NEEDS',
          'CM2 (W4) carried to mount: the support, and R with it, is in a lift accelerating upward at 1 m/s², so '
          "each block's E8 acceleration is its R-acceleration plus 1 m/s²; the pulley, at rest in R, then "
          'accelerates at 1 m/s², so with mass mP = 1 kg (Q4 gives it mass; the value is chosen here) its net force '
-         'is 1 N (Q5 rests on rin). Checker: refutes p: fUm = -82 (was -147/2). Keeping Q5 unchanged (as if the '
-         'pulley were massless) gives refutes p: fUm = -81 (was -147/2).',
+         'is 1 N (Q5 rests on rin). Keeping Q5 unchanged (as if the pulley were massless) gives refutes p: fUm = '
+         '-81 (was -147/2).',
          'W4; T§10(b) status for p: NEEDS',
          {'replace': {'e8rel1': 'a1 = Fnet1/m1 - 1', 'e8rel2': 'a2 = Fnet2/m2 - 1', 'Q5': 'fPp + fU = mP*1'},
           'values': {'mP': 1}}],
  'admG1': ['NEEDS',
            "W5 ('drop either interaction'): gravity on B1 is not admitted, so B1's sum has only its string member, "
-           'Fnet1 = T1. Checker: refutes p: fUm = -147/4 (was -147/2).',
-           "W5; T§10(b) status for p: NEEDS This world also breaks the 'same g at both blocks' and 'uniform over "
-           "the region of motion' clauses, which are recorded as text in g's INPUT (and in w2's); the checker "
-           'cannot see text, so this countermodel holds only if those clauses are read as part of W5 rather than '
-           'of g.',
+           'Fnet1 = T1.',
+           'W5; T§10(b) status for p: NEEDS',
            {'replace': {'sum1': 'Fnet1 = T1'}}],
  'admS1': ['REQUIRED',
            'W8: without the string admission at B1 there is a different account: sum1, sum2, meq, t9, dkin, rd1, '
-           'pairS1, pairS2, Q1 dropped. Checker: p does not follow: fUm left open.',
+           'pairS1, pairS2, Q1 dropped.',
            'W8; T§10(b) status for p: REQUIRED; taut clause ENTAILED by W13',
            {'drop_dependents': True}],
  'comp1': ['NEEDS',
-           'CM6 (W16) carried to mount: an unlisted 1 N downward push on B1. Checker: refutes p: fUm = -299/4 (was '
-           '-147/2).',
+           'CM6 (W16) carried to mount: an unlisted 1 N downward push on B1.',
            'W16; T§10(b) status for p: NEEDS',
            {'replace': {'sum1': 'Fnet1 = fG1 + T1 - 1'}}],
  'haze1': ['NEEDS',
-           "W16: the unkeyed omitted aggregate on B1 is H(B1) = -1 N, and B1's sum carries it. Checker: refutes p: "
-           'fUm = -299/4 (was -147/2). Changing the value alone gives p still follows: no recorded relation '
-           'mentions haze1.',
+           "W16: the unkeyed omitted aggregate on B1 is H(B1) = -1 N, and B1's sum carries it. Changing the value "
+           'alone gives p still follows: no recorded relation mentions haze1.',
            'W16; T§10(b) status for p: NEEDS',
            {'replace': {'haze1': -1, 'sum1': 'Fnet1 = fG1 + T1 + haze1'}}],
  'd3bind': ['USES',
             "D3 := |f(i_S1 → B1)| fixes which end 'the tension' names; mount uses T1 and T2, not T. Dropping what "
             'rests on it (t9) leaves the mount load: p still follows. New here (no T§10(b) row).',
-            'no T§10(b) row',
+            'no T§10(b) row Provisional (10 November 2026, P3): a normalization states the question, so it is '
+            'pruned by kind whatever its status.',
             {'drop_dependents': True}],
  'g': ['NEEDS',
-       'W6 carried to mount: g = 10 m/s² scales the tensions. Checker: refutes p: fUm = -75 (was -147/2).',
-       'W6; T§10(b) status for p: NEEDS',
+       'W6 carried to mount: g = 10 m/s² scales the tensions.',
+       'W6; T§10(b) status for p: NEEDS Provisional (10 November 2026, P1): g is the number and its free-fall '
+       'reading. The reading clause has its own countermodel, CM3: g read as a field strength with μ(B2) = 6 kg '
+       '(ff2 and peqv2, which rest on g, changed) gives a = 147/40, checked in the tests.',
        {'replace': {'g': 10}}],
  'w1': ['NEEDS',
-        "W5 ('a g that differs between the blocks'): the field at B1 is g + 1/5 m/s². Checker: refutes p: fUm = "
-        '-297/4 (was -147/2).',
-        "W5; T§10(b) status for p: NEEDS This world also breaks the 'same g at both blocks' and 'uniform over the "
-        "region of motion' clauses, which are recorded as text in g's INPUT (and in w2's); the checker cannot see "
-        'text, so this countermodel holds only if those clauses are read as part of W5 rather than of g.',
-        {'replace': {'w1': 'fG1 = -mu1*(g + 1/5)'}}],
+        "W5 ('a g that differs between the blocks'): the field at B1 is g + 1/5 m/s².",
+        "W5; T§10(b) status for p: NEEDS Provisional (10 November 2026, P1): the 'same g / uniform field' clause "
+        'is owned by w1, so this world breaks only w1. The free-fall reading ff1 rests on that clause and changes '
+        'with it.',
+        {'replace': {'w1': 'fG1 = -mu1*(g + 1/5)', 'ff1': 'fG1 = -m1*(g + 1/5)'}}],
  'peqv1': ['ENTAILED',
-           'W7: μ(B1) = m(B1) follows from the uniform-field weight (w1) and g read as the local free-fall '
-           "acceleration (g's recorded reading). That reading is text, so the checker cannot see it: not entailed "
-           'by w1, g. Under a field-strength reading it would be NEEDS: μ(B1) = 4 kg with m(B1) = 3 kg gives '
-           'refutes p: fUm = -343/4 (was -147/2) (side check, computed here).',
-           'W7; T§10(b) status for p: ENTAILED (free-fall reading) / NEEDS (field-strength reading)',
-           {'entailed_by': ['w1', 'g']}],
+           '',
+           'W7: μ(B1) = m(B1) follows from the uniform-field weight w1 and g read as the local free-fall '
+           'acceleration. Provisional (10 November 2026, P2): that reading is now recorded as the READING ff1 (fG1 '
+           '= -m1*g), so the entailment is confirmed. Under a field-strength reading of g, P-EQV fails; that world '
+           "is a countermodel to g's reading clause (see g).",
+           {'entailed_by': ['w1', 'g', 'ff1']}],
  'pull1': ['NEEDS',
            'W9 written out: the segment above B1 makes angle θ with the vertical (cos θ = 4/5), the string runs '
            "over a smooth peg (E-b's frictionless-contact option, so no wrap term), B1 is momentarily at rest at "
            "t0. B1's ŷ sum is Fnet1 = fG1 + (4/5)T1; E8 on x̂ gives 3·a1x = (3/5)T1; inextensibility gives "
            "(3/5)a1x + (4/5)y1'' + y2'' = 0; σ's counterpart at end 1 has ŷ-component -(4/5)T1 (T1 is the tension, "
-           'as M-EQ and D3 use it). Checker: refutes p: fUm = -11907/200 (was -147/2). Outside: {"pairS1": '
-           '["admG1", "admG2", "admS1", "admS2", "axis", "bn", "cquote", "sigma1"]}.',
-           "W9; T§10(b) status for p: NEEDS (verticality) The world also falsifies the 'segment above Bk is "
-           "vertical' clause of admSk's activation, which is text: verticality is stated in both admSk and pullk.",
+           'as M-EQ and D3 use it).',
+           'W9; T§10(b) status for p: NEEDS (verticality) Provisional (10 November 2026, P1): verticality is owned '
+           'by pull1; the string admission no longer states it.',
            {'replace': {'sum1': 'Fnet1 = fG1 + 4/5*T1',
                         'dkin': '3/5*a1x + 4/5*y1dd + y2dd = 0',
                         'pairS1': 'cS1 = -4/5*T1'},
             'add': ['3*a1x = 3/5*T1']}],
  'pp2': ['REQUIRED',
-         'W1: B2 is not a material object represented by a point-particle (e8rel2, dkin, rd2 dropped). Checker: p '
-         'does not follow: fUm left open.',
+         'W1: B2 is not a material object represented by a point-particle (e8rel2, dkin, rd2 dropped).',
          'W1; T§10(b) status for p: REQUIRED',
          {'drop_dependents': True}],
  'transl2': ['NEEDS',
              "W2 for B2: a rocking B2 whose representative's ŷ-acceleration exceeds the attachment point's by 1/2 "
-             'm/s². Checker: refutes p: fUm = -603/8 (was -147/2).',
+             'm/s².',
              'W2; T§10(b) status for p: NEEDS',
              {'replace': {'rd2': 'a2 = y2dd + 1/2'}}],
  'm2': ['NEEDS',
-        'W3 (computed for p in the example, not in the source) carried to mount: m(B2) = 6 kg. Checker: refutes p: '
-        'fUm = -392/5 (was -147/2).',
+        'W3 (computed for p in the example, not in the source) carried to mount: m(B2) = 6 kg.',
         'W3; T§10(b) status for p: NEEDS',
         {'replace': {'m2': 6}}],
  'admG2': ['NEEDS',
-           'W5: gravity on B2 is not admitted; Fnet2 = T2. Checker: refutes p: fUm = -147/4 (was -147/2).',
-           "W5; T§10(b) status for p: NEEDS This world also breaks the 'same g at both blocks' and 'uniform over "
-           "the region of motion' clauses, which are recorded as text in g's INPUT (and in w2's); the checker "
-           'cannot see text, so this countermodel holds only if those clauses are read as part of W5 rather than '
-           'of g.',
+           'W5: gravity on B2 is not admitted; Fnet2 = T2.',
+           'W5; T§10(b) status for p: NEEDS',
            {'replace': {'sum2': 'Fnet2 = T2'}}],
  'admS2': ['REQUIRED',
-           'W8: without the string admission at B2: sum2, meq, t9, dkin, rd2, pairS1, pairS2, Q1 dropped. Checker: '
-           'p does not follow: fUm left open.',
+           'W8: without the string admission at B2: sum2, meq, t9, dkin, rd2, pairS1, pairS2, Q1 dropped.',
            'W8; T§10(b) status for p: REQUIRED; taut clause ENTAILED by W13',
            {'drop_dependents': True}],
  'comp2': ['NEEDS',
-           'W16 (computed for p in the example) carried to mount: an unlisted 1 N downward push on B2. Checker: '
-           'refutes p: fUm = -297/4 (was -147/2).',
+           'W16 (computed for p in the example) carried to mount: an unlisted 1 N downward push on B2.',
            'W16; T§10(b) status for p: NEEDS',
            {'replace': {'sum2': 'Fnet2 = fG2 + T2 - 1'}}],
  'haze2': ['NEEDS',
-           "W16: H(B2) = -1 N and B2's sum carries it. Checker: refutes p: fUm = -297/4 (was -147/2).",
+           "W16: H(B2) = -1 N and B2's sum carries it.",
            'W16; T§10(b) status for p: NEEDS',
            {'replace': {'haze2': -1, 'sum2': 'Fnet2 = fG2 + T2 + haze2'}}],
  'w2': ['NEEDS',
-        "W5 ('a g that differs between the blocks'): the field at B2 is g + 1/5 m/s². Checker: refutes p: fUm = "
-        '-297/4 (was -147/2).',
-        "W5; T§10(b) status for p: NEEDS This world also breaks the 'same g at both blocks' and 'uniform over the "
-        "region of motion' clauses, which are recorded as text in g's INPUT (and in w2's); the checker cannot see "
-        'text, so this countermodel holds only if those clauses are read as part of W5 rather than of g.',
-        {'replace': {'w2': 'fG2 = -mu2*(g + 1/5)'}}],
+        "W5 ('a g that differs between the blocks'): the field at B2 is g + 1/5 m/s².",
+        "W5; T§10(b) status for p: NEEDS Provisional (10 November 2026, P1): the 'same g / uniform field' clause "
+        'is owned by w2, so this world breaks only w2. The free-fall reading ff2 rests on that clause and changes '
+        'with it.',
+        {'replace': {'w2': 'fG2 = -mu2*(g + 1/5)', 'ff2': 'fG2 = -m2*(g + 1/5)'}}],
  'peqv2': ['ENTAILED',
-           'W7 for B2, as peqv1: not entailed by w2, g. Under a field-strength reading, CM3 (μ(B2) = 6 kg) gives '
-           'refutes p: fUm = -1617/20 (was -147/2) for mount (side check).',
-           'W7; T§10(b) status for p: ENTAILED (free-fall reading) / NEEDS (field-strength reading)',
-           {'entailed_by': ['w2', 'g']}],
+           '',
+           'W7: μ(B2) = m(B2) follows from the uniform-field weight w2 and g read as the local free-fall '
+           'acceleration. Provisional (10 November 2026, P2): that reading is now recorded as the READING ff2 (fG2 '
+           '= -m2*g), so the entailment is confirmed. Under a field-strength reading of g, P-EQV fails; that world '
+           "is a countermodel to g's reading clause (see g).",
+           {'entailed_by': ['w2', 'g', 'ff2']}],
  'pull2': ['NEEDS',
-           'W9 for B2, as pull1 (segment above B2 at cos θ = 4/5, smooth peg, B2 momentarily at rest). Checker: '
-           'refutes p: fUm = -11907/200 (was -147/2). Outside: {"pairS2": ["admG1", "admG2", "admS1", "admS2", '
-           '"axis", "bn", "cquote", "sigma1"]}.',
-           "W9; T§10(b) status for p: NEEDS (verticality) The world also falsifies the 'segment above Bk is "
-           "vertical' clause of admSk's activation, which is text: verticality is stated in both admSk and pullk.",
+           'W9 for B2, as pull1 (segment above B2 at cos θ = 4/5, smooth peg, B2 momentarily at rest).',
+           'W9; T§10(b) status for p: NEEDS (verticality) Provisional (10 November 2026, P1): verticality is owned '
+           'by pull2; the string admission no longer states it.',
            {'replace': {'sum2': 'Fnet2 = fG2 + 4/5*T2',
                         'dkin': 'y1dd + 4/5*y2dd = 3/5*a2x',
                         'pairS2': 'cS2 = -4/5*T2'},
@@ -356,45 +327,45 @@ MOUNT_STATUSES = {'norm': ['REQUIRED',
         'W10 carried to mount: a string whose inertia is not negligible (λL = 1/2 kg) but whose weight is '
         'neglected, as Q4 does for the pulley, hanging with equal segments and released from rest at t0: the end '
         "forces differ, T2 = T1 + (1/2 kg)·a1, while σ's ŷ momentum change is zero at that instant, so Q1 and Q6 "
-        'still hold. Checker: refutes p: fUm = -6272/85 (was -147/2).',
-        'W10; T§10(b) status for p: NEEDS (via M-EQ)',
-        {'replace': {'meq': 'T2 = T1 + 1/2*a1'}}],
+        'still hold.',
+        'W10; T§10(b) status for p: NEEDS (via M-EQ) Provisional (10 November 2026, P2): the countermodel is '
+        "written on E-a's own relation, with M-EQ, which rests on it, dropped.",
+        {'replace': {'Ea': 'T2 - T1 - 1/2*a1 + Ft = 0'}, 'remove': ['meq']}],
  'Eb': ['NEEDS',
         'CM4 (W11) carried to mount: I/r² = 1 kg gives T2 = T1 + 1·a1; the balanced pulley turns about its fixed '
-        'axle, so Q5 still holds. Checker: refutes p: fUm = -3332/45 (was -147/2). CM5 (descending) gives refutes '
-        'p: fUm = -737/10 (was -147/2).',
-        'W11; T§10(b) status for p: NEEDS (via M-EQ)',
-        {'replace': {'meq': 'T2 = T1 + 1*a1'}}],
+        'axle, so Q5 still holds. CM5 (descending) gives refutes p: fUm = -737/10 (was -147/2).',
+        'W11; T§10(b) status for p: NEEDS (via M-EQ) Provisional (10 November 2026, P2): the countermodel is '
+        "written on E-b's own relation (F_t = −(I/r²)·a1), with M-EQ, which rests on it, dropped.",
+        {'replace': {'Eb': 'Ft = -1*a1'}, 'remove': ['meq']}],
  'meq': ['ENTAILED',
-         'M-EQ is replaced by its premise set E-a ∧ E-b, as for p. The recorder cannot check this: Ea and Eb carry '
-         'no relation, so the other premise relations leave T2 - T1 open: not entailed by the other premises. Its '
-         'relation is where the Ea and Eb countermodels act (rows Ea, Eb); replacing it alone (T2 = T1 + 1·a1) '
-         'gives refutes p: fUm = -3332/45 (was -147/2).',
-         'no T§10(b) row: replaced by its premise set W10 ∧ W11',
-         {'entailed_by': []}],
+         '',
+         'No T§10(b) row: M-EQ is replaced by its premise set E-a ∧ E-b (W10, W11). Provisional (10 November 2026, '
+         'P2): E-a (T2 − T1 + F_t = 0) and E-b (F_t = 0) now carry relations, so the entailment is confirmed; E-a '
+         'alone does not entail it.',
+         {'entailed_by': ['Ea', 'Eb']}],
  'J': ['REQUIRED',
        'Without an open interval J ∋ t0 carrying the trajectories, K12 and E7 have nothing to differentiate (dkin, '
-       'rd1, rd2 dropped). Checker: p does not follow: fUm left open. New here (no T§10(b) row).',
+       'rd1, rd2 dropped). New here (no T§10(b) row).',
        'no T§10(b) row',
        {'drop_dependents': True}],
  'Ka': ['NEEDS',
         "W12 carried to mount: an elastic cord whose stretch accelerates at L'' = 1/2 m/s² at t0, so y1'' + y2'' = "
-        '-1/2. Checker: refutes p: fUm = -573/8 (was -147/2).',
+        '-1/2.',
         'W12; T§10(b) status for p: NEEDS (via M-KIN)',
         {'replace': {'dkin': 'y1dd + y2dd = -1/2'}}],
  'Kb': ['REQUIRED',
-        'W13: slack near t0 gives only an inequality (dkin dropped). Checker: p does not follow: fUm left open.',
+        'W13: slack near t0 gives only an inequality (dkin dropped).',
         'W13; T§10(b) status for p: REQUIRED (via M-KIN)',
         {'drop_dependents': True}],
  'Kc': ['NEEDS',
         'W14 carried to mount: the axle accelerates upward at A_P = 1/2 m/s² (the pulley rides a carriage; the '
         "support and R stay as in [5]), so M-KIN gives y1'' + y2'' = 2A_P = 1, and the pulley (mass mP = 1 kg, "
-        'chosen here) has net force mP·A_P (Q5 rests on Kc). Checker: refutes p: fUm = -311/4 (was -147/2).',
+        'chosen here) has net force mP·A_P (Q5 rests on Kc).',
         'W14; T§10(b) status for p: NEEDS (via M-KIN)',
         {'replace': {'dkin': 'y1dd + y2dd = 1', 'Q5': 'fPp + fU = mP*1/2'}, 'values': {'mP': 1}}],
  'Kde': ['NEEDS',
          "W15 (rigid attachments) carried to mount: an elastic hook between σ's end 2 and B2 whose stretch "
-         "accelerates at 1/5 m/s², so y1'' + y2'' = -1/5. Checker: refutes p: fUm = -291/4 (was -147/2).",
+         "accelerates at 1/5 m/s², so y1'' + y2'' = -1/5.",
          'W15; T§10(b) status for p: NEEDS (rigid attachments)',
          {'replace': {'dkin': 'y1dd + y2dd = -1/5'}}],
  'mkin': ['ENTAILED',
@@ -405,31 +376,30 @@ MOUNT_STATUSES = {'norm': ['REQUIRED',
           {'entailed_by': []}],
  'diff': ['REQUIRED',
           'W15 (differentiability): without twice-differentiable y1, y2 the differentiation at [21] cannot run '
-          '(dkin dropped). Checker: p does not follow: fUm left open.',
+          '(dkin dropped).',
           'W15; T§10(b) status for p: REQUIRED (differentiability)',
           {'drop_dependents': True}],
  'bn': ['NEEDS',
         'Both string attachments are non-Newtonian by the same amount: each counterpart on σ falls 1/2 N short of '
         "the negation of the force on its block (e.g. momentum carried off by a third party). The string's own end "
         'pulls stay equal, so M-EQ still holds and the block accounts are unchanged; Q1 then gives a smaller push '
-        'from the pulley. Checker: refutes p: fUm = -145/2 (was -147/2). New here (W19 is USES for p).',
+        'from the pulley. New here (W19 is USES for p).',
         'W19; T§10(b) status for p: USES (matters only in T§7)',
         {'replace': {'pairS1': 'cS1 = -T1 + 1/2', 'pairS2': 'cS2 = -T2 + 1/2'}}],
  'sigma1': ['USES',
             'σ is two participants, the end-1 piece and the end-2 piece, each a massless link on the pulley: each '
             'piece balances separately (cS1 + fP1s = 0, cS2 + fP2s = 0) and the pulley receives their sum (fPs = '
-            'fP1s + fP2s). Checker: p still follows. New here (W19 is USES for p).',
+            'fP1s + fP2s). New here (W19 is USES for p).',
             'W19; T§10(b) status for p: USES (matters only in T§7)',
             {'replace': {'Q1': 'cS1 + fP1s = 0'}, 'add': ['cS2 + fP2s = 0', 'fPs = fP1s + fP2s']}],
  'Q2': ['REQUIRED',
         "No addressed string–pulley interaction i_P: σ's and the pulley's balances have no member for the contact "
-        '(Q1, Q5, pairP, pairU dropped). Checker: p does not follow: fUm left open. New here (W20 gives no '
-        'countermodel).',
+        '(Q1, Q5, pairP, pairU dropped). New here (W20 gives no countermodel).',
         'W20; T§10(b) status for p: Not used for p',
         {'drop_dependents': True}],
  'Q3': ['REQUIRED',
         'No addressed pulley–mount interaction i_U: nothing carries the load to the mount (Q1, Q5, pairP, pairU '
-        'dropped). Checker: p does not follow: fUm left open. New here.',
+        'dropped). New here.',
         'W20; T§10(b) status for p: Not used for p',
         {'drop_dependents': True}],
  'Q4': ['NEEDS',
@@ -443,20 +413,23 @@ MOUNT_STATUSES = {'norm': ['REQUIRED',
  'Q6': ['NEEDS',
         "A light rod presses σ onto the top of the pulley with 1 N: a third, normal contact on σ, so σ's set is "
         "not exactly {i_S1, i_S2, i_P}; it is normal to σ, so M-EQ holds. σ's balance over its true set reads cS1 "
-        '+ cS2 + fPs - 1 = 0. Checker: refutes p: fUm = -149/2 (was -147/2). New here.',
+        '+ cS2 + fPs - 1 = 0. New here.',
         'W20; T§10(b) status for p: Not used for p',
         {'replace': {'Q1': 'cS1 + cS2 + fPs - 1 = 0'}}],
  'Q7': ['NEEDS',
-        "i_U is not Newtonian: the mount's counterpart is 1/2 N short of the negation of f(i_U → pulley). Checker: "
-        'refutes p: fUm = -73 (was -147/2). If instead i_P or i_U is not binary, C-PAIR gives no counterpart: p '
-        'does not follow: fUm left open. New here.',
+        "i_U is not Newtonian: the mount's counterpart is 1/2 N short of the negation of f(i_U → pulley). If "
+        'instead i_P or i_U is not binary, C-PAIR gives no counterpart: p does not follow: fUm left open. New '
+        'here.',
         'W20; T§10(b) status for p: Not used for p',
         {'replace': {'pairU': 'fUm = -fU + 1/2'}}],
- 'Q1': ['NEEDS',
-        "σ's ŷ net force at t0 is -1 N. D allows it: E10 excludes σ, so no entry fixes σ's balance (T§7.3 OPEN). "
-        'Checker: refutes p: fUm = -145/2 (was -147/2). New here.',
-        'W20; T§10(b) status for p: Not used for p',
-        {'replace': {'Q1': 'cS1 + cS2 + fPs = -1'}}],
+ 'Q1': ['ENTAILED',
+        '',
+        'T§7.3 (Q1), the massless-link rule. Provisional (10 November 2026, P4): ENTAILED by E-a, like M-EQ: '
+        "negligible mass makes σ's net force zero. The check cannot confirm it, and the ledger warns: E-a's "
+        'recorded relation is the along-string form of that rule (T2 − T1 + F_t = 0), and Q1 is its ŷ form over '
+        "Q6's set; one premise carries one relation. D has no force-balance entry for σ (E10 excludes it, T§7.3 "
+        "OPEN). Written as a world, σ's ŷ net force of −1 N gives a mount load of −145/2.",
+        {'entailed_by': []}],
  'Q5': ['ENTAILED',
         "Q5 is the source's own consequence of K-c (axle at rest, in W4's inertial R), Q4 (positive mass) and Q6 "
         "(the pulley's set) through E9 (T§7.3). The recorder cannot check it: Kc, rin, Q4, Q6 and E9 carry no "
@@ -475,7 +448,7 @@ MOUNT_STATUSES = {'norm': ['REQUIRED',
  'cquote': ['USES',
             "W18: quote each interaction's vector on its other participant instead (σ for i_S1, i_S2; the pulley "
             'for i_P; the mount for i_U), the first participant receiving the negation. The pair relations are the '
-            'same equations. Checker: p still follows.',
+            'same equations.',
             'W18; T§10(b) status for p: USES',
             {'replace': {'pairS1': 'T1 = -cS1',
                          'pairS2': 'T2 = -cS2',

@@ -1763,13 +1763,14 @@ def test_hypothesis_set_prunes_non_world_kinds_and_entailed_or_uses_statuses():
     t.annotate("ent", "ENTAILED")
     t.annotate("usesit", "USES")
     led = t.ledger()
-    assert names_in(led, "pruned") == ["ax", "S", "both", "ent", "usesit"]
-    assert names_in(led, "commitments") == ["mix", "qn", "r"]
+    # provisional (10 November 2026): a normalization states the question, so it is pruned like a convention
+    assert names_in(led, "pruned") == ["ax", "S", "both", "qn", "ent", "usesit"]
+    assert names_in(led, "commitments") == ["mix", "r"]
     members = " ".join(m["member"] for m in t.hypothesis_set())
-    for gone in ("y up", "system S", "units and system", "entailed identity", "USES premise"):
+    for gone in ("y up", "system S", "units and system", "entailed identity", "USES premise", "read the question"):
         assert gone not in members
-    assert "axis plus an ideal model" in members and "read the question" in members
-    assert led["warnings"] == ["3 commitment(s) have no status yet: mix, qn, r"]
+    assert "axis plus an ideal model" in members
+    assert led["warnings"] == ["2 commitment(s) have no status yet: mix, r"]
 
 
 @pytest.mark.parametrize("status", ["NEEDS", "REQUIRED"])

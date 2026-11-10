@@ -53,11 +53,13 @@ INPUT_KINDS = {
     "completeness": "a claim that an account or membership is complete within a scope",
     "identity": "an identity or persistence commitment (same object, address or mass)",
     "convention": "a choice of axis, sign, unit or quoting convention (not a claim about the world)",
-    "normalization": "a reading of the wording of the question or exercise",
+    "normalization": "a reading of the wording of the question or exercise (it fixes what is asked, so it is not "
+                     "counted as a claim about the world: provisional, decided 10 November 2026)",
     "choice": "a tracer's choice that is not a claim about the world (e.g. a chosen system)",
     "haze": "a stipulation about unkeyed omitted influence",
 }
-NON_WORLD_KINDS = ("convention", "choice")
+# 'normalization' is provisional here (10 November 2026): a normalization states the question, not the world.
+NON_WORLD_KINDS = ("convention", "choice", "normalization")
 VALUE_KINDS = ("value", "haze")
 
 STATUSES = ("NEEDS", "REQUIRED", "ENTAILED", "USES")

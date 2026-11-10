@@ -50,7 +50,8 @@ def _cc_counterparts(name: str, cc_place: dict) -> list[str]:
 
 def transfer(rec: Trace, cc: Trace, label: str = LABEL) -> list[dict]:
     """Re-run each reconciled countermodel in the CC trace, against the CC premise that carries the reconciled
-    one, where every relation or value it changes exists there. 'same' is None when nothing could be run."""
+    one, where every relation or value it replaces exists there. A relation it only removes and the CC lacks is
+    skipped: there is nothing to remove. 'same' is None when nothing could be run."""
     rels, vals = cc._premise_system(label)
     cc_place = placements(cc, label)
     rows = []
@@ -59,17 +60,20 @@ def transfer(rec: Trace, cc: Trace, label: str = LABEL) -> list[dict]:
             continue
         row = {"premise": name, "status": status, "cc_premise": "", "same": None, "outside": [],
                "rec": rec.check_countermodel(name, answer=label, **check)["summary"]}
-        changed = _names(check)
+        have = lambda n: n in rels or n in vals  # noqa: E731
+        spec = {**check, "remove": [n for n in check.get("remove", []) if have(n)]}
+        changed = list(check.get("replace", {})) + spec["remove"]
         targets = _cc_counterparts(name, cc_place)
         if not targets:
             row["cc"] = "no CC premise carries it"
         elif not changed:
             row["cc"], row["cc_premise"] = "nothing to transfer (empty countermodel)", targets[0]
-        elif not all(n in rels or n in vals for n in changed):
-            missing = [n for n in changed if n not in rels and n not in vals]
-            row["cc"], row["cc_premise"] = f"not transferable: the CC trace has no {', '.join(missing)}", targets[0]
+        elif not all(have(n) for n in changed):
+            missing = [n for n in changed if not have(n)]
+            row["cc"] = f"not transferable: the CC trace has no relation or value {', '.join(missing)}"
+            row["cc_premise"] = targets[0]
         else:
-            runs = [(tg, cc.check_countermodel(tg, answer=label, **check)) for tg in targets]
+            runs = [(tg, cc.check_countermodel(tg, answer=label, **spec)) for tg in targets]
             tg, r = min(runs, key=lambda x: len(x[1]["outside"]))  # prefer a carrier the world keeps intact
             row.update(cc_premise=tg, cc=r["summary"], same=r["summary"] == row["rec"], outside=sorted(r["outside"]),
                        tried=[t for t, _ in runs if t != tg])
@@ -181,6 +185,10 @@ def test_value_countermodels_agree_in_both_traces():
     rows = {r["premise"]: r for r in compare()["transfer"]}
     for n in ("m1", "m2", "g"):
         assert rows[n]["same"], rows[n]
+    # Since the provisional decisions of 10 November the reconciled trace records relations the CC lacks (the
+    # free-fall reading ff_k, and relations on E-a and E-b), so those four countermodels no longer run there.
+    assert {n for n, r in rows.items() if r["same"] is not None} == {
+        "m1", "m2", "rin", "admG1", "admG2", "g", "pull1", "pull2", "comp1", "comp2"}
 
 
 def test_no_transferred_countermodel_disagrees_in_its_numbers():

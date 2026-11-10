@@ -44,7 +44,7 @@ Those errors are mechanical. A recorder can refuse them while the trace is writt
   - completeness;
   - identity;
   - convention;
-  - normalization;
+  - normalization (a reading of the question's wording);
   - choice;
   - haze.
 
@@ -78,7 +78,7 @@ Those errors are mechanical. A recorder can refuse them while the trace is writt
 - **Ledger.** Each answer has a ledger built from its provenance cone: every step it depends on. The ledger sorts the trace into these sections:
   - theory side (ENTRY, CONTRACT and READING steps that feed the answer);
   - world commitments, which are the members;
-  - pruned premises: status ENTAILED or USES, or only non-world kinds;
+  - pruned premises: status ENTAILED or USES, or only non-world kinds. The non-world kinds are convention, choice and, provisionally (decided 10 November 2026), normalization: a normalization fixes what is asked, not how the world is;
   - step members (DERIVE and EXTERNAL steps that feed the answer);
   - inputs that do not feed the answer;
   - other steps that do not feed the answer;
