@@ -76,7 +76,17 @@ When several entries define the call, the entry statement ends "chosen over En, 
 - `test_demand.py`: evidence on start and flatten events, with details and counts unchanged.
 - `test_workbench_record.py`: entry evidence and reopening evidence in saved records; replay still validates.
 
-## 9. Open Questions
+## 9. Provisional Decisions
+
+This is a prototype. Can accepted the five choices below on 11 November 2026 as good enough for now, and asked that they be marked for later thought. None is settled.
+
+1. **One list.** Entry applications and the starting demand sit in the same list as inputs and reductions, told apart by kind. The alternative is a second list for the theory side, since the 5 November trace-to-set record says an entry application "contributes no member".
+2. **Reopening is recorded but not listed.** It withdraws a response and asserts nothing. If it carries a claim, such as "the earlier response was a mistake", it should get a candidate.
+3. **The wording of the four new statements** (§5). The normalization statement is the weakest: the engine sees the demand, not the wording it came from.
+4. **A choice among several definitions is folded into the entry step** ("chosen over En"). Applying an entry is mechanical; choosing it is a person's judgement, and it is the selection function the December notes left open. In a law-house every law headword has two definitions, so the choice will arise on most steps of a Newton trace. It may deserve its own candidate.
+5. **A hole filled without a recorded step counts as a gap.** This is the only change that makes earlier behaviour stricter.
+
+## 10. Open Questions
 
 - **Kinds as an organizing vocabulary.** The hand-trace recorder sorts INPUTs into nine kinds. `supplied_input` here is still one kind.
 - **Normalization.** The engine sees the starting demand, not the wording it normalizes. The workbench record holds the wording as `question.context`; the trace does not.

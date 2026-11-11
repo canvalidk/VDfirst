@@ -5,6 +5,10 @@ Nothing is pruned, grouped or judged here. Sorting the list (theory side
 against commitments, current against history, needed against used) and
 testing its members are separate layers that read this output.
 It does not decide equivalence, observational fidelity, or theory failure.
+
+Prototype: which steps are listed, how a choice among definitions is recorded
+and the wording of the statements are provisional. See §9 of
+specs/2026-11-11-record-every-step.md before relying on them.
 """
 
 from __future__ import annotations
