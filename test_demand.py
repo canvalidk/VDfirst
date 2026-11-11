@@ -12,7 +12,6 @@ from demand import (
     RecallResolution,
     RootProvenance,
     Trace,
-    TraceEvent,
 )
 from definiens import Definiens
 from engine import VDInstance
@@ -494,9 +493,13 @@ class TestTrace:
         assert trace.root.definiens.headwords == ["force"]
         assert trace.worklist == [(trace.root, 0)]
         assert not trace.is_complete
-        assert trace.events == [
-            TraceEvent("trace", "started from 'find force'")
+        assert [(e.kind, e.detail) for e in trace.events] == [
+            ("trace", "started from 'find force'")
         ]
+        asked = trace.events[0].change
+        assert (asked.stimulus, asked.response) == ("find force", "find {force}")
+        assert asked.before == asked.after
+        assert asked.before.address == ()
 
     def test_start_with_order_zero_text_is_complete(self):
         v = VDInstance("empty")
@@ -567,9 +570,16 @@ class TestTrace:
         assert root.text() == "mass times acceleration"
         assert root.escaped_text() == "`mass` times `acceleration`"
         assert trace.is_complete
-        assert trace.events == [
-            TraceEvent("flatten", "active positions 0, 1")
+        assert [(e.kind, e.detail) for e in trace.events] == [
+            ("flatten", "active positions 0, 1")
         ]
+        left = trace.events[0].change
+        assert (left.stimulus, left.response, left.position) == (
+            "mass, acceleration", "mass, acceleration", None,
+        )
+        assert left.before.render == "{mass} times {acceleration}"
+        assert left.after.render == "mass times acceleration"
+        assert [a.resolution for a in left.after.arguments] == ["LiteralResolution"] * 2
 
     def test_flatten_active_position_resolves_one_position(self):
         root = demand(["", " times ", ""], ["mass", "acceleration"])
@@ -578,9 +588,22 @@ class TestTrace:
         assert trace.flatten_active_position(1) == [1]
         assert root.open_positions == [0]
         assert root.text() == "{mass} times acceleration"
-        assert trace.events == [
-            TraceEvent("flatten", "active position 1")
+        assert [(e.kind, e.detail) for e in trace.events] == [
+            ("flatten", "active position 1")
         ]
+        left = trace.events[0].change
+        assert (left.stimulus, left.position) == ("acceleration", 1)
+        assert left.after.render == "{mass} times acceleration"
+
+    def test_flatten_refusals_record_nothing(self):
+        root = demand(["", " times ", ""], ["mass", "acceleration"])
+        trace = Trace(root=root, active=root)
+        trace.flatten_active_position(1)
+        with pytest.raises(ValueError, match="already resolved"):
+            trace.flatten_active_position(1)
+        with pytest.raises(ValueError, match="out of range"):
+            trace.flatten_active_position(5)
+        assert len(trace.events) == 1
 
     def test_cancel_style_unresolve_reopens_parent_and_orphans_child(self):
         root = demand(["", ""], ["force"])

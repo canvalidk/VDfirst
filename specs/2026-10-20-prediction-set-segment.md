@@ -2,6 +2,10 @@
 
 Status: Implemented.
 
+Follow-up: `2026-11-11-record-every-step.md` extends the evidence and the
+projection to every trace-changing step (contract items 5, 6 and 9 below are
+read through it).
+
 Follow-up: `2026-10-24-prediction-correction.md` adds current recorded-support
 selection and combines this layer with parameterized headwords. The deferred
 list below describes the original segment's boundary.

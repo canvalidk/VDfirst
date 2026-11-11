@@ -89,7 +89,10 @@ def test_start_records_exact_dictionary_question_and_initial_snapshot():
     assert frame(record)["parent_id"] is None
     assert frame(record)["render"] == "{force_cart_0}"
     assert not frame(record)["resolved"]
-    assert latest(record)["prediction_set"]["predictions"] == []
+    asked = latest(record)["prediction_set"]["predictions"]
+    assert [(item["id"], item["kind"]) for item in asked] == [("P0", "normalization")]
+    assert asked[0]["evidence"]["stimulus"] == "force_cart_0"
+    assert record["events"][0]["change"]["response"] == "{force_cart_0}"
     supplied["entries"][0][1] = "altered outside the record"
     assert record["dictionary"]["entries"][0]["definition"] == DICTIONARY["entries"][0][1]
 
@@ -121,7 +124,18 @@ def test_recall_is_literal_while_expand_analyses_the_instantiated_definition():
     assert frame(recalled)["holes"][0]["child_frame_id"] is None
     assert len(latest(recalled)["frames"]) == 1
     assert latest(recalled)["prediction_set"]["trace_complete"]
-    assert latest(recalled)["prediction_set"]["predictions"] == []
+    recall = latest(recalled)["prediction_set"]["predictions"]
+    assert [(item["id"], item["kind"]) for item in recall] == [
+        ("P0", "normalization"), ("P1", "entry_recall"),
+    ]
+    assert recall[1]["evidence"]["entry"] == {
+        "index": 0, "headword": "force_p_t", "definition": "mass_p times acceleration_p_t",
+        "call": "force_cart_0", "bindings": [["p", "cart"], ["t", "0"]],
+        "text": "mass_cart times acceleration_cart_0", "candidates": [0, 3],
+        "dictionary": DICTIONARY["name"],
+    }
+    assert "chosen over E3" in recall[1]["statement"]
+    assert recalled["events"][1]["change"]["entry"]["index"] == 0
     expanded = command(record, "expand", position=0, entry_index=0)
     child = frame(expanded, "F/0")
     assert child["headwords"] == ["mass_cart", "acceleration_cart_0"]
@@ -130,6 +144,11 @@ def test_recall_is_literal_while_expand_analyses_the_instantiated_definition():
     assert child["parent_id"] == "F"
     assert child["via_position"] == 0
     assert not latest(expanded)["prediction_set"]["trace_complete"]
+    application = latest(expanded)["prediction_set"]["predictions"][-1]
+    assert (application["id"], application["kind"]) == ("P1", "entry_application")
+    assert application["evidence"]["entry"] == recall[1]["evidence"]["entry"]
+    assert latest(expanded)["prediction_set"]["current_prediction_ids"] == ["P0", "P1"]
+    assert latest(expanded)["prediction_set"]["dependency_selection_complete"]
 
 
 def test_supplied_input_is_analysed_and_keeps_its_exact_claim_evidence():
@@ -139,7 +158,8 @@ def test_supplied_input_is_analysed_and_keeps_its_exact_claim_evidence():
     assert frame(supplied, "F/0")["source_index"] is None
     assert frame(supplied, "F/0")["headwords"] == ["acceleration_cart_0"]
     assert not latest(supplied)["prediction_set"]["trace_complete"]
-    claim = latest(supplied)["prediction_set"]["predictions"][0]
+    claim = latest(supplied)["prediction_set"]["predictions"][-1]
+    assert claim["id"] == "P1"
     assert claim["kind"] == "supplied_input"
     assert claim["evidence"]["stimulus"] == "mass_cart"
     assert claim["evidence"]["response"] == "acceleration_cart_0"
@@ -375,8 +395,11 @@ def test_empty_dictionary_can_record_literal_results_and_correction():
     record = command(record, "reduce", response="11")
     predictions = latest(record)["prediction_set"]
     assert predictions["result"] == "11"
-    assert len(predictions["current_prediction_ids"]) == 1
-    assert len(predictions["historical_prediction_ids"]) == 1
+    assert predictions["current_prediction_ids"] == ["P0", "P3"]  # the question and the corrected response
+    assert predictions["historical_prediction_ids"] == ["P1"]
+    reopening = record["events"][2]
+    assert reopening["kind"] == "unreduce"
+    assert (reopening["change"]["stimulus"], reopening["change"]["response"]) == ("12", "5+6")
     assert validate_record(record) == record
 
 

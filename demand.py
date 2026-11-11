@@ -41,8 +41,29 @@ class NodeSnapshot:
 
 
 @dataclass(frozen=True)
+class EntryUse:
+    """Which dictionary entry a step applied, copied when it was applied.
+
+    ``headword`` and ``definition`` are the entry as authored. ``call`` is
+    the demand it answered, ``bindings`` the formal/actual pairs the call
+    supplied, and ``text`` the definition after instantiation. ``candidates``
+    lists every entry index that defines the call, so a choice among
+    several definitions stays visible.
+    """
+
+    index: int
+    headword: str
+    definition: str
+    call: str
+    bindings: tuple[tuple[str, str], ...]
+    text: str
+    candidates: tuple[int, ...]
+    dictionary: str = ""
+
+
+@dataclass(frozen=True)
 class TraceChange:
-    """Evidence for a response, not a certificate of equivalence."""
+    """Evidence for one recorded step, not a certificate that it was right."""
 
     stimulus: str
     response: str
@@ -51,11 +72,18 @@ class TraceChange:
     position: Optional[int] = None
     dependencies: tuple[int, ...] = ()
     dependencies_complete: bool = True
+    entry: Optional[EntryUse] = None
 
 
 @dataclass(frozen=True)
 class TraceEvent:
-    """One recorded trace/evaluator event."""
+    """One recorded trace/evaluator event.
+
+    Every step that changes what the trace says carries ``change``: starting
+    the trace, applying or recalling an entry, leaving a headword unexpanded,
+    supplying an input, a reduction, a wording clean-up and a reopening.
+    Navigation events carry none.
+    """
 
     kind: str
     detail: str
@@ -185,14 +213,15 @@ class Demand:
 
         Compression is a display choice and keeps a child's obligations.
         An overlay carries the lineage of the stimulus it actually consumed.
-        Unrecorded response mutations leave an explicit completeness gap.
+        A hole filled without a recorded step (a direct ``resolve_*`` call)
+        and an unrecorded response mutation each leave an explicit gap.
         """
         if self.reduced is not None and not underlying:
             return self._reduction_support
         supports = [self._prose_support]
+        unrecorded = _ClaimSupport(complete=False)
         for pos, resolution in self.resolutions.items():
-            default = _ClaimSupport(complete=not isinstance(resolution, InjectResolution))
-            supports.append(self._resolution_support.get(pos, default))
+            supports.append(self._resolution_support.get(pos, unrecorded))
             if isinstance(resolution, (ExpandResolution, InjectResolution)):
                 supports.append(resolution.child.claim_support())
         return _combine_support(*supports)
@@ -534,7 +563,12 @@ class Trace:
             provenance=RootProvenance(text),
         )
         trace = cls(root=root, active=root)
-        trace.record_event("trace", f"started from {text!r}")
+        root._prose_support = _ClaimSupport((len(trace.events),))
+        asked = trace.snapshot(root)
+        trace.record_event(
+            "trace", f"started from {text!r}",
+            TraceChange(text, asked.render, asked, asked),
+        )
         return trace
 
     def record_event(
@@ -602,11 +636,59 @@ class Trace:
 
     def unreduce_node(self, node: Demand, detail: str) -> TraceEvent:
         """Reopen the original expression and invalidate consumers, keeping history."""
-        self.address_of(node)
+        before = self.snapshot(node)
         if node.reduced is None:
             raise ValueError("node is not reduced")
+        support = node.claim_support()
         node.clear_reduction()
-        return self.record_event("unreduce", detail)
+        after = self.snapshot(node)
+        return self.record_event(
+            "unreduce", detail,
+            TraceChange(
+                before.render, after.render, before, after,
+                dependencies=support.event_indexes, dependencies_complete=support.complete,
+            ),
+        )
+
+    def expand_node(
+        self, sim, node: Demand, pos: int, index: int, detail: str,
+    ) -> TraceEvent:
+        """Apply dictionary entry ``index`` at an open hole as a child demand.
+
+        The entry text is instantiated for the demanded call and analysed by
+        ``sim`` here, so the recorded evidence is exactly what was inserted.
+        """
+        before = self.snapshot(node)
+        use = self._entry_use(sim, node, pos, index)
+        child = Demand(sim.analyse(use.text), provenance=ExpandProvenance(index))
+        node.resolve_expand(pos, child, index)
+        node._resolution_support[pos] = _ClaimSupport((len(self.events),))
+        return self.record_event(
+            "expand", detail,
+            TraceChange(use.call, use.text, before, self.snapshot(node), pos, entry=use),
+        )
+
+    def recall_node(
+        self, sim, node: Demand, pos: int, index: int, detail: str,
+        compressed: bool = False,
+    ) -> TraceEvent:
+        """Fill an open hole with entry ``index``'s instantiated text, literally."""
+        before = self.snapshot(node)
+        use = self._entry_use(sim, node, pos, index)
+        node.resolve_recall(pos, use.text, index, compressed=compressed)
+        node._resolution_support[pos] = _ClaimSupport((len(self.events),))
+        return self.record_event(
+            "recall", detail,
+            TraceChange(use.call, use.text, before, self.snapshot(node), pos, entry=use),
+        )
+
+    @staticmethod
+    def _entry_use(sim, node: Demand, pos: int, index: int) -> EntryUse:
+        node._check_open_position(pos)
+        call = node.headword_at(pos)
+        if index not in sim.entry_indexes(call):
+            raise ValueError(f"E{index} does not define {call!r}")
+        return sim.entry_use(index, call)
 
     def inject_node(
         self, node: Demand, pos: int, child: Demand, text: str, detail: str,
@@ -677,31 +759,33 @@ class Trace:
         """Flatten every open position on the active demand."""
 
         positions = list(self.active.open_positions)
-        for pos in positions:
-            self.active.resolve_literal(
-                pos,
-                self.active.headword_at(pos),
-                inert=True,
-                source="flatten",
-            )
         if positions:
-            self.record_event(
-                "flatten",
-                _format_position_event(positions),
-            )
+            self._flatten(positions, _format_position_event(positions))
         return positions
 
     def flatten_active_position(self, pos: int) -> list[int]:
         """Flatten one open position on the active demand."""
 
-        self.active.resolve_literal(
-            pos,
-            self.active.headword_at(pos),
-            inert=True,
-            source="flatten",
-        )
-        self.record_event("flatten", f"active position {pos}")
+        self.active._check_open_position(pos)
+        self._flatten([pos], f"active position {pos}")
         return [pos]
+
+    def _flatten(self, positions: list[int], detail: str) -> TraceEvent:
+        """Leave headwords unexpanded, as plain text, and record which ones."""
+        node = self.active
+        before = self.snapshot(node)
+        headwords = [node.headword_at(pos) for pos in positions]
+        for pos, headword in zip(positions, headwords):
+            node.resolve_literal(pos, headword, inert=True, source="flatten")
+            node._resolution_support[pos] = _ClaimSupport((len(self.events),))
+        listed = ", ".join(headwords)
+        return self.record_event(
+            "flatten", detail,
+            TraceChange(
+                listed, listed, before, self.snapshot(node),
+                positions[0] if len(positions) == 1 else None,
+            ),
+        )
 
     @property
     def worklist(self) -> list[tuple[Demand, int]]:

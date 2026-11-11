@@ -25,11 +25,15 @@ demands. Responses are scripted; the engine performs no arithmetic checking.
 
 | Stage | Current render | Current support | History only |
 |---|---|---|---|
-| Inputs supplied | `2 kg times 5 m/s^2` | P2, P3 | none |
-| Mistake recorded | `12 N` | P2, P3, P4 | none |
-| Answer uses mistake | `Prediction: 12 N` | P2, P3, P4, P5 | none |
-| Calculation reopened | `2 kg times 5 m/s^2` | P2, P3 | P4, P5 |
-| Corrected answer | `Prediction: 10 N` | P2, P3, P7, P8 | P4, P5 |
+| Inputs supplied | `2 kg times 5 m/s^2` | P0, P1, P2, P3 | none |
+| Mistake recorded | `12 N` | P0, P1, P2, P3, P4 | none |
+| Answer uses mistake | `Prediction: 12 N` | P0, P1, P2, P3, P4, P5 | none |
+| Calculation reopened | `2 kg times 5 m/s^2` | P0, P1, P2, P3 | P4, P5 |
+| Corrected answer | `Prediction: 10 N` | P0, P1, P2, P3, P7, P8 | P4, P5 |
+
+P0 is the starting demand `force_cart_0`. P1 is the application of entry E0
+with `p := cart` and `t := 0`; its evidence holds the entry as authored, the
+bindings and the instantiated text. P2 and P3 are the supplied inputs.
 
 P4 retains the exact mistaken pair. P5 records the report that consumed it.
 Reopening the calculation clears both live overlays, leaving their events

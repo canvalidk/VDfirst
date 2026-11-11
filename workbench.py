@@ -14,7 +14,7 @@ import re
 from uuid import UUID, uuid4
 
 from demand import (
-    Demand, ExpandProvenance, ExpandResolution, InjectProvenance,
+    Demand, ExpandResolution, InjectProvenance,
     InjectResolution, RecallResolution, Trace,
 )
 from engine import VDInstance
@@ -249,12 +249,8 @@ def _execute(trace, sim, command):
         text = sim.instantiated_entry_text(index, headword)
         if len(text) > MAX_TEXT * 4:
             raise RecordError('instantiated definition exceeds the text limit')
-        if operation == 'expand':
-            child = Demand(sim.analyse(text), provenance=ExpandProvenance(index))
-            node.resolve_expand(position, child, index)
-        else:
-            node.resolve_recall(position, text, index)
-        trace.record_event(operation, f'{detail}; position {position}; E{index}')
+        record = trace.expand_node if operation == 'expand' else trace.recall_node
+        record(sim, node, position, index, f'{detail}; position {position}; E{index}')
     elif operation == 'inject':
         text = command['response']
         child = Demand(sim.analyse(text), provenance=InjectProvenance(text))

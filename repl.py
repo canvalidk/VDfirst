@@ -1066,16 +1066,12 @@ class REPL:
     ) -> None:
         assert self.trace is not None
         active = self.trace.active
-        child = Demand(
-            self.sim.analyse(entry.text),
-            provenance=ExpandProvenance(entry.index),
-        )
-        active.resolve_expand(pos, child, source_index=entry.index)
-        self.trace.active = child
-        self.trace.record_event(
-            "expand",
+        self.trace.expand_node(
+            self.sim, active, pos, entry.index,
             f"E{entry.index} at position {pos}",
         )
+        child = active.children()[pos]
+        self.trace.active = child
         self.print_fn(
             f"expanded E{entry.index} at position {pos}; now at child."
         )
@@ -1091,9 +1087,8 @@ class REPL:
     ) -> None:
         assert self.trace is not None
         active = self.trace.active
-        active.resolve_recall(pos, entry.text, entry.index)
-        self.trace.record_event(
-            "recall",
+        self.trace.recall_node(
+            self.sim, active, pos, entry.index,
             f"E{entry.index} at position {pos}",
         )
         self.print_fn(f"recalled E{entry.index} at position {pos}.")

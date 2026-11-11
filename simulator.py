@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from engine import VDInstance
 from definiens import Definiens
+from demand import EntryUse
 
 
 class Simulator:
@@ -116,6 +117,28 @@ class Simulator:
 
         self._check_index(index)
         return self.instance.instantiate_entry(index, call)
+
+    def entry_use(self, index: int, call: str) -> EntryUse:
+        """Everything a trace records when entry ``index`` answers ``call``.
+
+        The authored entry, the formal/actual pairs the call supplies, the
+        instantiated text, and every entry index that defines the call.
+        Raises like ``instantiated_entry_text`` when the entry does not
+        define the call.
+        """
+
+        text = self.instantiated_entry_text(index, call)
+        signature, parsed = self.instance.resolve_call(call)
+        return EntryUse(
+            index=index,
+            headword=self.entry_headword(index),
+            definition=self.entry_text(index),
+            call=call,
+            bindings=tuple(zip(signature.formals, parsed.actuals)),
+            text=text,
+            candidates=tuple(self.entry_indexes(call)),
+            dictionary=self.instance.name,
+        )
 
     # ── Tokenisation pass-through ───────────────────────────────────
 
