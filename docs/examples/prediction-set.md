@@ -88,7 +88,9 @@ does not settle whether injection ultimately belongs in the same equality family
 
 The set includes recorded history, including replaced or cleared reductions.
 Schema version 2 added `current_prediction_ids`, `historical_prediction_ids`,
-and `dependency_selection_complete`; version 3 lists every recorded step.
+and `dependency_selection_complete`; version 3 lists every recorded step;
+version 4 adds `issued`, the results declared as answers, each with the
+candidates it rested on when issued.
 These fields select recorded step lineage
 for the current result; they do not decide semantic necessity or correctness.
 A replacement made directly on an existing overlay consumes its earlier

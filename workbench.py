@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 
 from demand import (
     Demand, ExpandResolution, InjectProvenance,
-    InjectResolution, RecallResolution, Trace,
+    InjectResolution, LiteralResolution, RecallResolution, Trace,
 )
 from engine import VDInstance
 from prediction_set import build_prediction_set
@@ -163,7 +163,8 @@ def _snapshot(trace, sim, command_index, title):
             resolution = node.resolutions.get(position)
             kind = ('expand' if isinstance(resolution, ExpandResolution)
                     else 'recall' if isinstance(resolution, RecallResolution)
-                    else 'inject' if isinstance(resolution, InjectResolution) else None)
+                    else 'inject' if isinstance(resolution, InjectResolution)
+                    else 'flatten' if isinstance(resolution, LiteralResolution) else None)
             candidates = []
             if resolution is None:
                 for index in sim.entry_indexes(headword):
@@ -206,7 +207,8 @@ def _command(value):
     _keys(value, ('operation', 'frame_id'),
           ('position', 'entry_index', 'response', 'latents', 'note'), 'command')
     operation = value['operation']
-    if type(operation) is not str or operation not in {'expand', 'recall', 'inject', 'reduce', 'reopen', 'clean'}:
+    if type(operation) is not str or operation not in {
+            'expand', 'recall', 'inject', 'flatten', 'reduce', 'reopen', 'clean', 'issue'}:
         raise RecordError('unsupported command operation')
     _text(value['frame_id'], 'frame ID', maximum=128)
     if not re.fullmatch(r'F(?:/(?:0|[1-9][0-9]*))*', value['frame_id']):
@@ -214,8 +216,9 @@ def _command(value):
     if 'note' in value:
         _text(value['note'], 'command note', empty=True, maximum=1024)
     extras = {'expand': {'position', 'entry_index'}, 'recall': {'position', 'entry_index'},
-              'inject': {'position', 'response'}, 'reduce': {'response'},
-              'reopen': set(), 'clean': {'latents'}}[operation]
+              'inject': {'position', 'response'}, 'flatten': {'position'},
+              'reduce': {'response'}, 'reopen': set(), 'clean': {'latents'},
+              'issue': set()}[operation]
     if set(value) - {'operation', 'frame_id', 'note'} != extras:
         raise RecordError(f'{operation} requires exactly {", ".join(sorted(extras)) or "no extra fields"}')
     for field in ('position', 'entry_index'):
@@ -239,7 +242,7 @@ def _execute(trace, sim, command):
     note = command.get('note', '')
     detail = f'{operation} at {frame_id}' + (f': {note}' if note else '')
     position = command.get('position')
-    if operation in ('expand', 'recall', 'inject'):
+    if operation in ('expand', 'recall', 'inject', 'flatten'):
         node._check_open_position(position)
     if operation in ('expand', 'recall'):
         index = command['entry_index']
@@ -255,6 +258,12 @@ def _execute(trace, sim, command):
         text = command['response']
         child = Demand(sim.analyse(text), provenance=InjectProvenance(text))
         trace.inject_node(node, position, child, text, f'{detail}; position {position}')
+    elif operation == 'flatten':
+        trace.flatten_node(node, [position], f'{detail}; position {position}')
+    elif operation == 'issue':
+        if node is not trace.root:
+            raise RecordError('only the root result can be issued; use frame F')
+        trace.issue(detail)
     elif operation == 'reduce':
         trace.reduce_node(node, command['response'], detail)
     elif operation == 'reopen':

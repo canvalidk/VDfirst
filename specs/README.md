@@ -33,5 +33,7 @@ current code are the implementation contract.
   current recorded support, and mistake/correction demo.
 - `2026-10-24-trace-workbench.md` - portable replayable records, local HTTP
   bridge and live website workbench boundary.
+- `2026-11-12-workbench-flatten-and-issue.md` - bridge commands for leaving a
+  headword unexpanded and for issuing a result; what a website client must handle.
 - `2026-11-11-record-every-step.md` - every trace-changing step recorded with
   evidence and listed unpruned; production kept apart from organizing and testing.

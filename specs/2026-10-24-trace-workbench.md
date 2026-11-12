@@ -22,19 +22,19 @@ interface TraceRecord {
   snapshots: Snapshot[];
 }
 interface Command {
-  operation: 'expand' | 'recall' | 'inject' | 'reduce' | 'reopen' | 'clean';
+  operation: 'expand' | 'recall' | 'inject' | 'flatten' | 'reduce' | 'reopen' | 'clean' | 'issue';  // flatten, issue: 2026-11-12
   frame_id: string; position?: number; entry_index?: number;
   response?: string; latents?: string[]; note?: string;
 }
 interface Snapshot {
   id: string; command_index: number; title: string; root_frame_id: 'F'; event_count: number;
-  frames: Frame[]; prediction_set: /* VDfirst prediction-set schema, version 3 since 2026-11-11 */ object;
+  frames: Frame[]; prediction_set: /* VDfirst prediction-set schema, version 4 since 2026-11-12 */ object;
 }
 interface Frame {
   id: string; address: number[]; parent_id: string | null; via_position: number | null;
   render: string; resolved: boolean; reduced: string | null; source_index: number | null;
   headwords: string[]; latents: string[];
-  holes: { position: number; headword: string; resolution: 'expand' | 'recall' | 'inject' | null;
+  holes: { position: number; headword: string; resolution: 'expand' | 'recall' | 'inject' | 'flatten' | null;
     child_frame_id: string | null; source_index: number | null;
     candidates: { entry_index: number; headword: string; definition: string; instantiated_definition: string }[] }[];
 }
@@ -76,5 +76,5 @@ The producer fingerprint describes the loaded engine sources and is frozen
 on import. Restart the bridge after source edits. Existing records remain
 viewable offline if a newer engine cannot continue them. No migration is
 silently attempted. Arbitrary dictionary editing in the website, automatic
-checking, the full prediction disjunction, flattening and the whole REPL
+checking, the full prediction disjunction and the whole REPL
 command surface remain beyond this small workbench protocol.

@@ -94,7 +94,13 @@ as the implementation/test surface.
   organizing and testing the list are separate layers. Use
   `Trace.expand_node` / `Trace.recall_node`, not direct `resolve_*` calls.
   See `specs/2026-11-11-record-every-step.md`.
-- Expected test result: 534 passing tests.
+- The workbench bridge also takes `flatten` and `issue`. Issuing records the root
+  result as the trace's answer and freezes what it rested on; nothing is locked,
+  and a redo is issued again. Issued results are in `prediction_set.issued`
+  (schema 4), apart from the candidates. See
+  `specs/2026-11-12-workbench-flatten-and-issue.md`, whose section 10 lists what a
+  website client must handle.
+- Expected test result: 539 passing tests.
 - Next likely work: Design 2.1 interaction integration, richer trace
   presentation such as `tree` or `show <headword>`, and any automated
   compression-on-resolve UX if it is still wanted.
