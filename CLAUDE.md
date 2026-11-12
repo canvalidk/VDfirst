@@ -106,7 +106,11 @@ as the implementation/test surface.
   requires; when one entry is left the choice is forced, and the entry step
   records every clause and which fit (schema 5). Prototype: see
   `specs/2026-11-12-structured-arguments.md` and `member_list_demo.py`.
-- Expected test result: 590 passing tests.
+- `hypothesis_set.build_hypothesis_set(prediction_set)` is the first piece of
+  the organizing layer: for one issued result it sorts the steps it rested on
+  into the prediction, the theory side and the members. It reads the record
+  and changes nothing. See `specs/2026-11-12-hypothesis-set-view.md`.
+- Expected test result: 598 passing tests.
 - Next likely work: Design 2.1 interaction integration, richer trace
   presentation such as `tree` or `show <headword>`, and any automated
   compression-on-resolve UX if it is still wanted.
