@@ -216,7 +216,7 @@ def test_parameterized_repl_records_candidates_and_correction():
     data = json.loads(output[-1])
     assert calculation.reduced == "10 N"
     assert data["result"] == "Prediction: 10 N"
-    assert data["schema_version"] == 4
+    assert data["schema_version"] == 5
     assert data["dependency_selection_complete"]
     assert len(data["historical_prediction_ids"]) == 2
     assert any("[history only]" in line for line in output)

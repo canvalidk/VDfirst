@@ -100,7 +100,13 @@ as the implementation/test surface.
   (schema 4), apart from the candidates. See
   `specs/2026-11-12-workbench-flatten-and-issue.md`, whose section 10 lists what a
   website client must handle.
-- Expected test result: 539 passing tests.
+- Arguments may be lists (`[a,b]`) or tagged values (`A:x`), and formals may be
+  patterns (`[]`, `[h|t]`, `TAG:x`), so several entries can define one stem as
+  clauses. An entry answers a call only if the arguments have the form it
+  requires; when one entry is left the choice is forced, and the entry step
+  records every clause and which fit (schema 5). Prototype: see
+  `specs/2026-11-12-structured-arguments.md` and `member_list_demo.py`.
+- Expected test result: 590 passing tests.
 - Next likely work: Design 2.1 interaction integration, richer trace
   presentation such as `tree` or `show <headword>`, and any automated
   compression-on-resolve UX if it is still wanted.

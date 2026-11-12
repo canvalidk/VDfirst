@@ -6,6 +6,10 @@
 - Scope: underscore calls, flat partial instantiation, tokenizer and trace integration
 - Decision history: [Function-call model](../docs/decision-history/2026-09-01-function-call-model.md)
 
+Follow-up: `2026-11-12-structured-arguments.md` replaces the atomic-argument
+rule of section 2 and the one-formal-list rule of section 3 with values,
+patterns and clauses. Dictionaries that use neither behave as specified here.
+
 ## 1. Purpose
 
 VD entries may describe parameterized symbols without adding primitive

@@ -28,7 +28,7 @@ interface Command {
 }
 interface Snapshot {
   id: string; command_index: number; title: string; root_frame_id: 'F'; event_count: number;
-  frames: Frame[]; prediction_set: /* VDfirst prediction-set schema, version 4 since 2026-11-12 */ object;
+  frames: Frame[]; prediction_set: /* VDfirst prediction-set schema, version 5 since 2026-11-12 */ object;
 }
 interface Frame {
   id: string; address: number[]; parent_id: string | null; via_position: number | null;

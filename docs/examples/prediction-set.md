@@ -90,7 +90,9 @@ The set includes recorded history, including replaced or cleared reductions.
 Schema version 2 added `current_prediction_ids`, `historical_prediction_ids`,
 and `dependency_selection_complete`; version 3 lists every recorded step;
 version 4 adds `issued`, the results declared as answers, each with the
-candidates it rested on when issued.
+candidates it rested on when issued; version 5 adds `evidence.entry.clauses`,
+every entry of the stem, so a definition ruled out by the form of the demand
+can be told apart from one a person passed over.
 These fields select recorded step lineage
 for the current result; they do not decide semantic necessity or correctness.
 A replacement made directly on an existing overlay consumes its earlier

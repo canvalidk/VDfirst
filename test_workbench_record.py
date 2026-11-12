@@ -133,6 +133,7 @@ def test_recall_is_literal_while_expand_analyses_the_instantiated_definition():
         "call": "force_cart_0", "bindings": [["p", "cart"], ["t", "0"]],
         "text": "mass_cart times acceleration_cart_0", "candidates": [0, 3],
         "dictionary": DICTIONARY["name"],
+        "clauses": [[0, "force_p_t"], [3, "force_p_t"]],
     }
     assert "chosen over E3" in recall[1]["statement"]
     assert recalled["events"][1]["change"]["entry"]["index"] == 0
@@ -495,5 +496,5 @@ def test_issuing_freezes_what_each_result_rested_on():
     # The first issue is not rewritten by the redo, and an issue is not itself a candidate.
     assert when_issued["issued"] == [first]
     assert all(item["operation"] != "issue" for item in final["predictions"])
-    assert final["schema_version"] == 4
+    assert final["schema_version"] == 5
     assert validate_record(record) == record

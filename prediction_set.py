@@ -101,7 +101,7 @@ class PredictionSet:
     trace_complete: bool
     predictions: tuple[Prediction, ...]
     unrecorded_events: tuple[int, ...]
-    schema_version: int = 4
+    schema_version: int = 5
     scope: str = "recorded trace history"
     coverage_complete: bool = False
     limitations: tuple[str, ...] = (
@@ -137,6 +137,9 @@ def _entry_statement(use: EntryUse, recalled: bool) -> str:
         statement += f"; with {pairs} that gives {use.text!r} for the demand {use.call!r}"
     elif use.call != use.headword:
         statement += f"; it answers the demand {use.call!r}"
+    ruled_out = [index for index, _ in use.clauses if index not in use.candidates]
+    if ruled_out:
+        statement += "; the form of the demand rules out " + ", ".join(f"E{index}" for index in ruled_out)
     others = [index for index in use.candidates if index != use.index]
     if others:
         statement += "; chosen over " + ", ".join(f"E{index}" for index in others)
