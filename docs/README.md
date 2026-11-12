@@ -15,8 +15,14 @@ It is separate from:
 
 - `ROADMAP.md` - current build path from simulator cleanup toward trace proof
   of concept.
+- `decision-history/` - chronological question-and-answer records, including
+  temporary choices that must be revisited.
 - `adr/` - architecture decision records for durable design choices.
 - `examples/` - golden examples and trace sketches.
+  See [trace-derived prediction candidates](examples/prediction-set.md) for
+  the response-to-claim layer, classification, and its current coverage.
+  The [mistake and correction walkthrough](examples/correction-demo.md) combines
+  parameterized calls with current-support selection and retained history.
 - `glossary/` - living terms shared between Theory, Newton, and Code.
 - `process/` - workflows for turning ideas into specs, tests, and code.
 
@@ -34,4 +40,3 @@ For a new technical reader:
 
 Docs here should explain stable direction and decisions. Rough ideas belong in
 `codex_context/notes/` or in a spec marked `Sketch` or `Draft`.
-

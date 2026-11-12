@@ -25,6 +25,20 @@ current code are the implementation contract.
 - `2026-06-10-vd-reduction.md` - draft backwards-pass reduction overlay
   spec for settled demand nodes.
 - `2026-06-10-vd-cycle-info.md` - draft trace cycle-information surface.
+- `2026-09-01-vd-parameterized-headwords.md` - implemented prototype for
+  underscore function calls and flat partial instantiation.
+- `2026-10-20-prediction-set-segment.md` - recorded responses, classifications,
+  and prediction candidate export.
+- `2026-10-24-prediction-correction.md` - integrated parameterized traces,
+  current recorded support, and mistake/correction demo.
+- `2026-10-24-trace-workbench.md` - portable replayable records, local HTTP
+  bridge and live website workbench boundary.
 - `2026-11-08-hand-trace-ledger.md` - hand-trace recorder and ledger
   (`handtrace.py`): records hand traces step by step, checks the
   arithmetic, and sorts each answer's premises into its hypothesis set.
+- `2026-11-12-structured-arguments.md` - list and tagged arguments, clause
+  patterns, and choice of definition by the form of an argument.
+- `2026-11-12-workbench-flatten-and-issue.md` - bridge commands for leaving a
+  headword unexpanded and for issuing a result; what a website client must handle.
+- `2026-11-11-record-every-step.md` - every trace-changing step recorded with
+  evidence and listed unpruned; production kept apart from organizing and testing.

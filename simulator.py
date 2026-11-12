@@ -18,8 +18,10 @@ Conventions:
 
 from __future__ import annotations
 
+from application import HeadwordApplicationError, HeadwordArityError
 from engine import VDInstance
 from definiens import Definiens
+from demand import EntryUse
 
 
 class Simulator:
@@ -93,17 +95,72 @@ class Simulator:
     # ── Lookup by headword ──────────────────────────────────────────
 
     def entry_indexes(self, headword: str) -> list[int]:
-        """E-numbers of all entries with this headword, in dictionary
-        order.
+        """E-numbers applicable to a headword or headword call.
 
-        Returns [] if the headword is not in the dictionary. No
-        distinction between absent and empty since a headword cannot
-        exist without at least one entry.
+        Exact authored-headword lookup remains the fast path.  Otherwise,
+        a bare, partial, or complete call resolves through the signature's
+        stem.  Returns [] if no signature exists.  Results remain in
+        dictionary order.
         """
+        if not headword:
+            return []
+
+        try:
+            answering = self.instance.entry_by_call(headword)
+        except HeadwordArityError:
+            raise
+        except HeadwordApplicationError:
+            answering = []
+        if answering:
+            return [e.index for e in answering]
         return [
             e.index for e in self.instance.entries
             if e.headword == headword
         ]
+
+    def instantiated_entry_text(self, index: int, call: str) -> str:
+        """Selected entry text after flat instantiation for ``call``."""
+
+        self._check_index(index)
+        return self.instance.instantiate_entry(index, call)
+
+    def clause_indexes(self, call: str) -> list[int]:
+        """E-numbers of every entry that defines the stem of ``call``,
+        whether or not the form of its arguments fits. Returns [] when the
+        call does not parse or names no stem in the dictionary."""
+
+        try:
+            return [e.index for e in self.instance.clauses_for_call(call)]
+        except HeadwordArityError:
+            raise
+        except HeadwordApplicationError:
+            return []
+
+    def entry_use(self, index: int, call: str) -> EntryUse:
+        """Everything a trace records when entry ``index`` answers ``call``.
+
+        The authored entry, the formal/actual pairs the call supplies, the
+        instantiated text, and every entry index that defines the call.
+        Raises like ``instantiated_entry_text`` when the entry does not
+        define the call.
+        """
+
+        text = self.instantiated_entry_text(index, call)
+        _, parsed = self.instance.resolve_call(call)
+        return EntryUse(
+            index=index,
+            headword=self.entry_headword(index),
+            definition=self.entry_text(index),
+            call=call,
+            bindings=self.instance.entry_by_index(index).signature.bindings(parsed),
+            text=text,
+            candidates=tuple(self.entry_indexes(call)),
+            dictionary=self.instance.name,
+            clauses=tuple(
+                (clause, self.entry_headword(clause))
+                for clause in self.clause_indexes(call)
+            ),
+        )
 
     # ── Tokenisation pass-through ───────────────────────────────────
 
