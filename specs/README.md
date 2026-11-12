@@ -33,6 +33,8 @@ current code are the implementation contract.
   current recorded support, and mistake/correction demo.
 - `2026-10-24-trace-workbench.md` - portable replayable records, local HTTP
   bridge and live website workbench boundary.
+- `2026-11-12-hypothesis-set-view.md` - the hypothesis set of an issued result,
+  as a view that sorts the record and removes nothing.
 - `2026-11-12-structured-arguments.md` - list and tagged arguments, clause
   patterns, and choice of definition by the form of an argument.
 - `2026-11-12-workbench-flatten-and-issue.md` - bridge commands for leaving a

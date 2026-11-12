@@ -28,6 +28,7 @@ import json
 
 from demand import Demand, InjectProvenance, Trace
 from engine import VDInstance
+from hypothesis_set import build_hypothesis_set
 from prediction_set import PredictionSet, build_prediction_set
 from simulator import Simulator
 
@@ -137,9 +138,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--json", action="store_true", help="export both prediction sets")
     parser.add_argument("--steps", action="store_true", help="print every recorded step for A")
+    parser.add_argument("--hypotheses", action="store_true", help="print the hypothesis set of A's issued result")
     args = parser.parse_args()
     sim = build_demo_simulator()
     results = {obj: build_prediction_set(trace_object(sim, obj)) for obj in ("A", "B")}
+    if args.hypotheses:
+        print(build_hypothesis_set(results["A"]).render())
+        return
     if args.json:
         print(json.dumps({
             "demo": "member-named list through the contribution recursion",

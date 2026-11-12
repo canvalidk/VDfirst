@@ -35,6 +35,7 @@ This file tracks which specs are active, historical, or only exploratory.
 | `2026-10-20-prediction-set-segment.md` | Implemented | Frozen response evidence, trace-derived prediction candidates, explicit categories and JSON export. |
 | `2026-10-24-prediction-correction.md` | Implemented | Parameterized prediction traces, current recorded support, consumer invalidation and correction demo. |
 | `2026-10-24-trace-workbench.md` | Implemented prototype | Versioned JSON records, exact command replay, frame/result/prediction snapshots and local website bridge. |
+| `2026-11-12-hypothesis-set-view.md` | Implemented prototype | Organizing layer: the hypothesis set of one issued result as a view over the prediction set. |
 | `2026-11-12-structured-arguments.md` | Implemented prototype | List and tagged arguments, clause patterns on formals, choice of definition forced by form and recorded as such (schema 5); member-list demo. |
 | `2026-11-12-workbench-flatten-and-issue.md` | Implemented prototype | Bridge commands `flatten` and `issue`; issued results listed apart from candidates (schema 4); client notes for the website. |
 | `2026-11-11-record-every-step.md` | Implemented | Evidence for every trace-changing step (question, entry application, recall, unexpanded headword, reopening); the projection lists every step unpruned (schema 3). |
