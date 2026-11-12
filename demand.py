@@ -15,11 +15,51 @@ from residual import Residual
 
 
 @dataclass(frozen=True)
+class ArgumentSnapshot:
+    """One delivered argument as it appeared when a change was made."""
+
+    position: int
+    headword: str
+    text: str
+    resolution: str
+    source_index: Optional[int]
+
+
+@dataclass(frozen=True)
+class NodeSnapshot:
+    """Copied context, independent of later edits and rendering choices."""
+
+    address: tuple[int, ...]
+    render: str
+    latents: tuple[str, ...]
+    headwords: tuple[str, ...]
+    arguments: tuple[ArgumentSnapshot, ...]
+    provenance: str
+    source_index: Optional[int]
+    source_text: Optional[str]
+    reduction: Optional[str]
+
+
+@dataclass(frozen=True)
+class TraceChange:
+    """Evidence for a response, not a certificate of equivalence."""
+
+    stimulus: str
+    response: str
+    before: NodeSnapshot
+    after: NodeSnapshot
+    position: Optional[int] = None
+    dependencies: tuple[int, ...] = ()
+    dependencies_complete: bool = True
+
+
+@dataclass(frozen=True)
 class TraceEvent:
     """One recorded trace/evaluator event."""
 
     kind: str
     detail: str
+    change: Optional[TraceChange] = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +134,23 @@ Resolution = Union[
 ]
 
 
+@dataclass(frozen=True)
+class _ClaimSupport:
+    """Recorded response lineage; completeness says nothing about correctness."""
+
+    event_indexes: tuple[int, ...] = ()
+    complete: bool = True
+
+
+def _combine_support(
+    *supports: _ClaimSupport, event_index: Optional[int] = None,
+) -> _ClaimSupport:
+    indexes = {index for support in supports for index in support.event_indexes}
+    if event_index is not None:
+        indexes.add(event_index)
+    return _ClaimSupport(tuple(sorted(indexes)), all(s.complete for s in supports))
+
+
 @dataclass
 class Demand:
     """One demanded Definiens plus decisions for its original holes."""
@@ -105,10 +162,51 @@ class Demand:
     reduced: Optional[str] = None
     cleaned: bool = False
     cleaned_recalls: set[int] = field(default_factory=set)
+    _prose_support: _ClaimSupport = field(
+        default_factory=_ClaimSupport, init=False, repr=False,
+    )
+    _resolution_support: dict[int, _ClaimSupport] = field(
+        default_factory=dict, init=False, repr=False,
+    )
+    _reduction_support: _ClaimSupport = field(
+        default_factory=lambda: _ClaimSupport(complete=False), init=False, repr=False,
+    )
 
     def __post_init__(self) -> None:
         for pos in self.resolutions:
             self._check_position(pos)
+        if self.cleaned:
+            self._prose_support = _ClaimSupport(complete=False)
+        for pos in self.cleaned_recalls:
+            self._resolution_support[pos] = _ClaimSupport(complete=False)
+
+    def claim_support(self, *, underlying: bool = False) -> _ClaimSupport:
+        """Select recorded support for the current value, including consumed claims.
+
+        Compression is a display choice and keeps a child's obligations.
+        An overlay carries the lineage of the stimulus it actually consumed.
+        Unrecorded response mutations leave an explicit completeness gap.
+        """
+        if self.reduced is not None and not underlying:
+            return self._reduction_support
+        supports = [self._prose_support]
+        for pos, resolution in self.resolutions.items():
+            default = _ClaimSupport(complete=not isinstance(resolution, InjectResolution))
+            supports.append(self._resolution_support.get(pos, default))
+            if isinstance(resolution, (ExpandResolution, InjectResolution)):
+                supports.append(resolution.child.claim_support())
+        return _combine_support(*supports)
+
+    def _clear_reductions_upward(self) -> None:
+        node = self
+        while node is not None:
+            node.reduced = None
+            node._reduction_support = _ClaimSupport()
+            node = node.parent
+
+    def _invalidate_consumers(self) -> None:
+        if self.parent is not None:
+            self.parent._clear_reductions_upward()
 
     def _check_position(self, pos: int) -> None:
         if pos < 0 or pos >= self.definiens.order:
@@ -199,13 +297,11 @@ class Demand:
             raise KeyError(pos)
 
         resolution = self.resolutions.pop(pos)
+        self._resolution_support.pop(pos, None)
         if isinstance(resolution, (ExpandResolution, InjectResolution)):
             resolution.child.parent = None
 
-        node = self
-        while node is not None:
-            node.reduced = None
-            node = node.parent
+        self._clear_reductions_upward()
 
     def set_compression(
         self,
@@ -251,11 +347,17 @@ class Demand:
                 "cannot reduce: demand subtree is not fully resolved"
             )
         self.reduced = text
+        self._reduction_support = _ClaimSupport(complete=False)
+        self._invalidate_consumers()
 
     def clear_reduction(self) -> None:
         """Remove the reduction overlay, restoring the full render."""
 
+        had_reduction = self.reduced is not None
         self.reduced = None
+        self._reduction_support = _ClaimSupport()
+        if had_reduction:
+            self._invalidate_consumers()
 
     def set_latents(self, new_latents: list[str]) -> None:
         """Replace this demand's latent strings, preserving headwords."""
@@ -270,6 +372,9 @@ class Demand:
             self.definiens.headwords,
         )
         self.cleaned = True
+        self._prose_support = _ClaimSupport(complete=False)
+        if self.reduced is None:
+            self._invalidate_consumers()
 
     def clean_recall_text(self, pos: int, text: str) -> None:
         """Rewrite the stored text of a recalled hole."""
@@ -286,6 +391,9 @@ class Demand:
             compressed=resolution.compressed,
         )
         self.cleaned_recalls.add(pos)
+        self._resolution_support[pos] = _ClaimSupport(complete=False)
+        if self.reduced is None:
+            self._invalidate_consumers()
 
     def headword_at(self, pos: int) -> str:
         """Return the original headword demanded at this hole."""
@@ -429,12 +537,126 @@ class Trace:
         trace.record_event("trace", f"started from {text!r}")
         return trace
 
-    def record_event(self, kind: str, detail: str) -> TraceEvent:
+    def record_event(
+        self, kind: str, detail: str, change: Optional[TraceChange] = None,
+    ) -> TraceEvent:
         """Append one trace event."""
 
-        event = TraceEvent(kind=kind, detail=detail)
+        event = TraceEvent(kind=kind, detail=detail, change=change)
         self.events.append(event)
         return event
+
+    def address_of(self, node: Demand) -> tuple[int, ...]:
+        """Locate a member by original hole positions, using identity."""
+        path = []
+        seen = set()
+        while node is not self.root:
+            if id(node) in seen or node.parent is None:
+                raise ValueError("demand is not attached to this trace")
+            seen.add(id(node))
+            parent = node.parent
+            pos = next(
+                (pos for pos, child in parent.children().items() if child is node),
+                None,
+            )
+            if pos is None:
+                raise ValueError("demand is not attached to this trace")
+            path.append(pos)
+            node = parent
+        return tuple(reversed(path))
+
+    def snapshot(self, node: Demand) -> NodeSnapshot:
+        """Freeze the local residue, delivered arguments and provenance."""
+        return NodeSnapshot(
+            address=self.address_of(node),
+            render=node.text(),
+            latents=tuple(node.definiens.residual.latent),
+            headwords=tuple(node.definiens.headwords),
+            arguments=tuple(
+                ArgumentSnapshot(
+                    pos, node.headword_at(pos), node._render_position(pos),
+                    type(resolution).__name__,
+                    getattr(resolution, "source_index", None),
+                )
+                for pos, resolution in sorted(node.resolutions.items())
+            ),
+            provenance=type(node.provenance).__name__,
+            source_index=getattr(node.provenance, "source_index", None),
+            source_text=getattr(node.provenance, "text", None),
+            reduction=node.reduced,
+        )
+
+    def reduce_node(self, node: Demand, text: str, detail: str) -> TraceEvent:
+        """Apply and record an evaluator response with its exact stimulus."""
+        before = self.snapshot(node)
+        support = node.claim_support()
+        node.set_reduction(text)
+        node._reduction_support = _combine_support(support, event_index=len(self.events))
+        return self.record_event(
+            "reduce", detail,
+            TraceChange(
+                before.render, text, before, self.snapshot(node),
+                dependencies=support.event_indexes, dependencies_complete=support.complete,
+            ),
+        )
+
+    def unreduce_node(self, node: Demand, detail: str) -> TraceEvent:
+        """Reopen the original expression and invalidate consumers, keeping history."""
+        self.address_of(node)
+        if node.reduced is None:
+            raise ValueError("node is not reduced")
+        node.clear_reduction()
+        return self.record_event("unreduce", detail)
+
+    def inject_node(
+        self, node: Demand, pos: int, child: Demand, text: str, detail: str,
+    ) -> TraceEvent:
+        """Record supplied text before its child is evaluated or cleaned."""
+        before = self.snapshot(node)
+        stimulus = node.headword_at(pos)
+        node.resolve_inject(pos, child)
+        node._resolution_support[pos] = _ClaimSupport((len(self.events),))
+        return self.record_event(
+            "inject", detail,
+            TraceChange(stimulus, text, before, self.snapshot(node), pos),
+        )
+
+    def clean_node(
+        self, node: Demand, latents: list[str], detail: str,
+    ) -> TraceEvent:
+        """Record a residual wording edit, even beneath a reduction."""
+        before = self.snapshot(node)
+        support = node.claim_support(underlying=True)
+        node.set_latents(latents)
+        node._prose_support = _combine_support(support, event_index=len(self.events))
+        after = self.snapshot(node)
+        return self.record_event(
+            "clean", detail,
+            TraceChange(
+                _snapshot_prose(before), _snapshot_prose(after), before, after,
+                dependencies=support.event_indexes, dependencies_complete=support.complete,
+            ),
+        )
+
+    def clean_recall(
+        self, node: Demand, pos: int, text: str, detail: str,
+    ) -> TraceEvent:
+        """Record the actual recalled text, even when its display is folded."""
+        before = self.snapshot(node)
+        resolution = node.resolutions.get(pos)
+        if not isinstance(resolution, RecallResolution):
+            raise ValueError(f"position {pos} is not a recall")
+        stimulus = resolution.text
+        support = node.claim_support(underlying=True)
+        node.clean_recall_text(pos, text)
+        node._resolution_support[pos] = _combine_support(support, event_index=len(self.events))
+        return self.record_event(
+            "clean", detail,
+            TraceChange(
+                stimulus, text, before, self.snapshot(node), pos,
+                dependencies=support.event_indexes, dependencies_complete=support.complete,
+            ),
+        )
 
     def up(self) -> None:
         """Move active focus to the parent demand."""
@@ -499,6 +721,15 @@ class Trace:
     @property
     def is_complete(self) -> bool:
         return self.root.is_resolved
+
+
+def _snapshot_prose(snapshot: NodeSnapshot) -> str:
+    """Render residual prose with its recorded arguments, ignoring overlay."""
+    arguments = {arg.position: arg.text for arg in snapshot.arguments}
+    parts = [snapshot.latents[0]]
+    for pos, headword in enumerate(snapshot.headwords):
+        parts.extend((arguments.get(pos, "{" + headword + "}"), snapshot.latents[pos + 1]))
+    return "".join(parts)
 
 
 def _escape_literal(text: str) -> str:

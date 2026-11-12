@@ -20,9 +20,10 @@ Human inputs should be generated lazily. Nothing should be supplied eagerly
 just because a physicist would usually know it. The simulator should ask for a
 human input only when the current demand chain requires it.
 
-Degree-0 demands should return. When a child demand is complete, the evaluator
-should work back up the tree and continue with the parent, more like an
-evaluation stack than a passive tree viewer.
+Degree-0 demands return through parked gates. When a child demand is complete,
+the simulator leaves focus on the settled frame so the user can reduce, clean,
+return, or move onward deliberately. Text crossing a frame boundary is a
+human-ratified act, not a silent unwind.
 
 ## Target Trace Capabilities
 
@@ -41,11 +42,11 @@ The Level 2 trace direction suggests the simulator should eventually support:
 
 A conservative next implementation target could be:
 
-1. Add an audit/event layer that can record human inputs and demanded-by
-   provenance.
-2. Add return/unwind semantics for completed child demands.
-3. Add REPL commands to inspect events and audit records.
-4. Use Newton/Atwood documents as reference examples, but keep the first code
+1. Add typed human-input records with demanded-by provenance.
+2. Decide how much provenance belongs inline in `state`, `events`, or a richer
+   audit view.
+3. Add richer trace presentation such as `tree` or `show <headword>` if needed.
+4. Use Newton/Atwood documents as reference examples, but keep the next code
    target small and testable.
 
 ## Non-Goals For The Simulator
@@ -55,4 +56,3 @@ A conservative next implementation target could be:
 - fully general symbolic physics solving;
 - replacing the Newton branch's entry design;
 - encoding unrevealed Theory assumptions prematurely.
-
