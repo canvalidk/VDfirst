@@ -17,6 +17,7 @@ The export contains:
 
 | ID | Kind | Author-supplied category | Recorded pair |
 |---|---|---|---|
+| P0 | normalization | (unclassified) | mass times acceleration → {mass} times {acceleration} |
 | P1 | supplied_input | parameter input | mass → 2 kg |
 | P2 | supplied_input | parameter input | acceleration → 5 m/s^2 |
 | P3 | meaning_preservation | correct maths | 2 kg times 5 m/s^2 → 10 N |
@@ -73,26 +74,34 @@ the extractor does not guess their source text from today's render.
 
 ## Boundary of this segment
 
-This covers reductions, supplied inputs, and cleanup wording changes. Cleanup
+Every step that changes what the trace says is listed: the starting demand
+(`normalization`), entry applications and recalls (`entry_application`,
+`entry_recall`), headwords left unexpanded (`left_unexpanded`), supplied
+inputs, reductions and cleanup wording changes. An entry candidate's evidence
+holds the entry as authored, the parameter bindings, the instantiated text and
+every entry index that defines the call. The list is unsorted and unpruned:
+organizing it and testing its members are separate layers. Cleanup
 gets its own meaning-preservation claim, including when an overlay hides the
 edited prose. The equality criterion remains a matter of interpretation.
 Supplied inputs provisionally get an appropriateness obligation; that wording
 does not settle whether injection ultimately belongs in the same equality family.
 
 The set includes recorded history, including replaced or cleared reductions.
-Schema version 2 adds `current_prediction_ids`, `historical_prediction_ids`,
-and `dependency_selection_complete`. These select recorded response lineage
+Schema version 2 added `current_prediction_ids`, `historical_prediction_ids`,
+and `dependency_selection_complete`; version 3 lists every recorded step.
+These fields select recorded step lineage
 for the current result; they do not decide semantic necessity or correctness.
 A replacement made directly on an existing overlay consumes its earlier
 claim. To correct the original calculation, first use `unreduce`.
 
-Unrecorded response mutations or legacy events leave selection incomplete;
+Unrecorded response mutations, holes filled by direct `resolve_*` calls, or
+legacy events leave selection incomplete;
 in that case the export does not assert that other claims are history-only.
 Compression retains the underlying child's support. Cleanup beneath an
 overlay becomes current when that overlay is reopened.
 
 The `coverage_complete` field is always false: the projection omits recognition,
-dictionary selection, scene-to-sheet fidelity, missing-object alternatives, and other
+scene-to-sheet fidelity, missing-object alternatives, and other
 families needed for a full prediction-set disjunction. No red/green verdict,
 automatic correctness check, or logical OR is inferred from this list.
 

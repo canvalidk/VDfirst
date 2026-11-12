@@ -86,7 +86,15 @@ as the implementation/test surface.
   validates all saved snapshots before continuation; scientific claims remain
   unchecked. The optional website bridge is stateless and loopback-only.
   See `specs/2026-10-24-trace-workbench.md`.
-- Expected test result: 523 passing tests.
+- Every step that changes what a trace says is recorded with frozen evidence:
+  the starting demand, entry applications and recalls (with the entry, its
+  parameter bindings and the other definitions available), headwords left
+  unexpanded, supplied inputs, reductions, cleanups and reopenings. The
+  prediction set (schema 3) lists every recorded step and prunes nothing;
+  organizing and testing the list are separate layers. Use
+  `Trace.expand_node` / `Trace.recall_node`, not direct `resolve_*` calls.
+  See `specs/2026-11-11-record-every-step.md`.
+- Expected test result: 534 passing tests.
 - Next likely work: Design 2.1 interaction integration, richer trace
   presentation such as `tree` or `show <headword>`, and any automated
   compression-on-resolve UX if it is still wanted.

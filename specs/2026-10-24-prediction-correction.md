@@ -2,6 +2,10 @@
 
 Status: Implemented.
 
+Follow-up: `2026-11-11-record-every-step.md` makes entry applications, recalls,
+unexpanded headwords and the starting demand recorded steps, so they appear in
+current support and unrecorded ones leave a selection gap. Schema version 3.
+
 ## Scope
 
 Combine `codex/parameterized-headwords` and `codex/prediction-set-layer` in

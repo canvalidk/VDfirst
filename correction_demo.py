@@ -6,7 +6,7 @@ import argparse
 from dataclasses import asdict, dataclass
 import json
 
-from demand import Demand, ExpandProvenance, InjectProvenance, Trace
+from demand import Demand, InjectProvenance, Trace
 from engine import VDInstance
 from prediction_set import Classification, PredictionSet, build_prediction_set
 from repl import REPL
@@ -39,27 +39,27 @@ def build_correction_demo() -> tuple[DemoStage, ...]:
     trace = Trace.start(sim, "force_cart_0")
     call = trace.root.headword_at(0)
     index = sim.entry_indexes(call)[0]
-    calculation = Demand(
-        sim.analyse(sim.instantiated_entry_text(index, call)),
-        provenance=ExpandProvenance(index),
-    )
-    trace.root.resolve_expand(0, calculation, index)
-    trace.record_event("expand", f"E{index} for {call}")
+    trace.expand_node(sim, trace.root, 0, index, f"E{index} for {call}")
+    calculation = trace.root.children()[0]
     for pos, text in enumerate(("2 kg", "5 m/s^2")):
         child = Demand(sim.analyse(text), provenance=InjectProvenance(text))
         trace.inject_node(calculation, pos, child, text, f"input for {call} at {pos}")
 
     stages = []
 
+    def category(claim) -> str:
+        if claim.kind == "normalization":
+            return "question"
+        if claim.kind == "entry_application":
+            return "entry applied"
+        if claim.kind == "supplied_input":
+            return "parameter input"
+        return "calculation" if claim.evidence.before.address else "report wording"
+
     def capture(title: str, description: str) -> None:
         candidates = build_prediction_set(trace)
         categories = {
-            claim.id: Classification(
-                "parameter input" if claim.kind == "supplied_input"
-                else "calculation" if claim.evidence.before.address
-                else "report wording"
-            )
-            for claim in candidates.predictions
+            claim.id: Classification(category(claim)) for claim in candidates.predictions
         }
         stages.append(DemoStage(title, description, build_prediction_set(trace, categories)))
 
