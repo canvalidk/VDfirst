@@ -69,6 +69,22 @@ The demo distinguishes current support from history at each stage. Interpreter
 responses are scripted and every claim stays unchecked. See the
 [correction walkthrough](docs/examples/correction-demo.md) for REPL instructions.
 
+## Structured arguments
+
+An argument may be a list or a tagged value, and several entries may define
+one stem with different patterns on an argument's form. The form then decides
+which definition can answer a demand:
+
+```powershell
+python member_list_demo.py
+python member_list_demo.py --steps
+```
+
+The demo runs the contribution recursion over a member-named list for two
+blocks joined by springs. Every empty-or-not split and every action-or-reaction
+dispatch is forced by form; inputs and arithmetic responses are scripted. See
+[the spec](specs/2026-11-12-structured-arguments.md).
+
 ## Website workbench and saved records
 
 In this checkout, start the local bridge:
@@ -113,4 +129,4 @@ from `workbench.py`. See [the versioned record contract](specs/2026-10-24-trace-
 python -m pytest -q
 ```
 
-Expected baseline: 539 passing tests.
+Expected baseline: 590 passing tests.

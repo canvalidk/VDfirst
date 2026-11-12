@@ -46,9 +46,12 @@ class EntryUse:
 
     ``headword`` and ``definition`` are the entry as authored. ``call`` is
     the demand it answered, ``bindings`` the formal/actual pairs the call
-    supplied, and ``text`` the definition after instantiation. ``candidates``
-    lists every entry index that defines the call, so a choice among
-    several definitions stays visible.
+    supplied, and ``text`` the definition after instantiation. ``clauses``
+    lists every entry that defines the stem of the call, with its authored
+    headword; ``candidates`` are the ones whose required form the arguments
+    of the call have. A clause that is not a candidate was ruled out by
+    form, with no judgement; a choice among several candidates was made by
+    a person.
     """
 
     index: int
@@ -59,6 +62,7 @@ class EntryUse:
     text: str
     candidates: tuple[int, ...]
     dictionary: str = ""
+    clauses: tuple[tuple[int, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -688,6 +692,8 @@ class Trace:
         node._check_open_position(pos)
         call = node.headword_at(pos)
         if index not in sim.entry_indexes(call):
+            if index in sim.clause_indexes(call):
+                raise ValueError(f"E{index} requires a form that {call!r} does not have")
             raise ValueError(f"E{index} does not define {call!r}")
         return sim.entry_use(index, call)
 

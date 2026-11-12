@@ -18,6 +18,7 @@ Conventions:
 
 from __future__ import annotations
 
+from application import HeadwordApplicationError, HeadwordArityError
 from engine import VDInstance
 from definiens import Definiens
 from demand import EntryUse
@@ -104,19 +105,36 @@ class Simulator:
         if not headword:
             return []
 
-        exact = [
+        try:
+            answering = self.instance.entry_by_call(headword)
+        except HeadwordArityError:
+            raise
+        except HeadwordApplicationError:
+            answering = []
+        if answering:
+            return [e.index for e in answering]
+        return [
             e.index for e in self.instance.entries
             if e.headword == headword
         ]
-        if exact:
-            return exact
-        return [e.index for e in self.instance.entry_by_call(headword)]
 
     def instantiated_entry_text(self, index: int, call: str) -> str:
         """Selected entry text after flat instantiation for ``call``."""
 
         self._check_index(index)
         return self.instance.instantiate_entry(index, call)
+
+    def clause_indexes(self, call: str) -> list[int]:
+        """E-numbers of every entry that defines the stem of ``call``,
+        whether or not the form of its arguments fits. Returns [] when the
+        call does not parse or names no stem in the dictionary."""
+
+        try:
+            return [e.index for e in self.instance.clauses_for_call(call)]
+        except HeadwordArityError:
+            raise
+        except HeadwordApplicationError:
+            return []
 
     def entry_use(self, index: int, call: str) -> EntryUse:
         """Everything a trace records when entry ``index`` answers ``call``.
@@ -128,16 +146,20 @@ class Simulator:
         """
 
         text = self.instantiated_entry_text(index, call)
-        signature, parsed = self.instance.resolve_call(call)
+        _, parsed = self.instance.resolve_call(call)
         return EntryUse(
             index=index,
             headword=self.entry_headword(index),
             definition=self.entry_text(index),
             call=call,
-            bindings=tuple(zip(signature.formals, parsed.actuals)),
+            bindings=self.instance.entry_by_index(index).signature.bindings(parsed),
             text=text,
             candidates=tuple(self.entry_indexes(call)),
             dictionary=self.instance.name,
+            clauses=tuple(
+                (clause, self.entry_headword(clause))
+                for clause in self.clause_indexes(call)
+            ),
         )
 
     # ── Tokenisation pass-through ───────────────────────────────────

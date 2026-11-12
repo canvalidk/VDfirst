@@ -26,6 +26,7 @@ from application import (
     HeadwordSignature,
     HeadwordSignatureConflictError,
     instantiate_definition,
+    scan_value,
 )
 from residual import Residual
 from definiens import Definiens
@@ -228,27 +229,44 @@ class Tokeniser:
     def _signatures(
         self,
         headword_set: set[str],
-    ) -> list[HeadwordSignature]:
-        """Parse and validate the temporary one-signature-per-stem rule."""
+    ) -> list[tuple[HeadwordSignature, tuple[str, ...]]]:
+        """One scanning signature per stem, with every authored spelling of it.
 
-        by_stem: dict[str, HeadwordSignature] = {}
+        Entries of one stem share an arity. Where they leave a position
+        plain they use one name; patterns on the form of an argument may
+        differ, so a stem can have several spellings. A reference to the
+        stem counts as a reference to each of them.
+        """
+
+        by_stem: dict[str, list[HeadwordSignature]] = {}
         for headword in sorted(headword_set):
             signature = HeadwordSignature.parse(headword)
             normalised = self.normalise(signature.stem)
             key = normalised if self.case_sensitive else normalised.lower()
-            existing = by_stem.get(key)
-            if existing is not None and existing.formals != signature.formals:
-                raise HeadwordSignatureConflictError(
-                    existing.stem,
-                    existing.formals,
-                    signature.formals,
-                )
-            if existing is None:
-                by_stem[key] = signature
+            clauses = by_stem.setdefault(key, [])
+            for existing in clauses:
+                if not existing.compatible_with(signature):
+                    raise HeadwordSignatureConflictError(
+                        existing.stem,
+                        existing.formals,
+                        signature.formals,
+                    )
+            if signature not in clauses:
+                clauses.append(signature)
+
+        def spellings(clauses: list[HeadwordSignature]) -> tuple[str, ...]:
+            # Clauses that differ only in the case of the stem keep the one
+            # representative spelling they always had.
+            if all(clause.formals == clauses[0].formals for clause in clauses):
+                return (clauses[0].text,)
+            return tuple(clause.text for clause in clauses)
 
         return sorted(
-            by_stem.values(),
-            key=lambda signature: len(self.normalise(signature.stem)),
+            (
+                (clauses[0], spellings(clauses))
+                for clauses in by_stem.values()
+            ),
+            key=lambda group: len(self.normalise(group[0].stem)),
             reverse=True,
         )
 
@@ -256,13 +274,16 @@ class Tokeniser:
         self,
         signature: HeadwordSignature,
         text: str,
+        structured_only: bool = False,
     ) -> list[tuple[int, int, HeadwordCall]]:
-        """Find bare/partial/full calls of one signature in ``text``."""
+        """Find bare/partial/full calls of one signature in ``text``.
+
+        With ``structured_only``, only calls with a list or tagged argument.
+        """
 
         base = self.normalise(signature.stem)
         search_text = text if self.case_sensitive else text.lower()
         search_base = base if self.case_sensitive else base.lower()
-        argument_re = re.compile(ARGUMENT_ATOM_PATTERN)
         matches: list[tuple[int, int, HeadwordCall]] = []
 
         cursor = 0
@@ -279,14 +300,18 @@ class Tokeniser:
             actuals: list[str] = []
             malformed = False
             while end < len(text) and text[end] == "_":
-                match = argument_re.match(text, end + 1)
-                if match is None:
+                stop = scan_value(text, end + 1)
+                if stop is None:
                     malformed = True
                     break
-                actuals.append(match.group(0))
-                end = match.end()
+                actuals.append(text[end + 1:stop])
+                end = stop
 
             if malformed or not self._is_boundary(text, end):
+                continue
+            if structured_only and not any(
+                actual.startswith("[") or ":" in actual for actual in actuals
+            ):
                 continue
 
             call = HeadwordCall(signature.stem, tuple(actuals))
@@ -307,22 +332,30 @@ class Tokeniser:
         text: str,
         escaped_mask: list[bool],
         headword_set: set[str],
-    ) -> tuple[list[tuple[int, int, str, str]], str]:
-        """Return positional (signature, call) matches and blanked text."""
+    ) -> tuple[list[tuple[int, int, tuple[str, ...], str]], str]:
+        """Return positional (authored spellings, call) matches and blanked text.
+
+        Calls with a list or tagged argument are matched first. Their
+        arguments sit between delimiters and may spell other headwords,
+        which must not be read as demands of their own.
+        """
 
         working = self._mask_escaped(text, escaped_mask)
-        matches: list[tuple[int, int, str, str]] = []
-        for signature in self._signatures(headword_set):
-            for start, end, call in self._find_signature_calls(
-                signature,
-                working,
-            ):
-                matches.append((start, end, signature.text, call.text))
-                working = (
-                    working[:start]
-                    + "\x00" * (end - start)
-                    + working[end:]
-                )
+        matches: list[tuple[int, int, tuple[str, ...], str]] = []
+        groups = self._signatures(headword_set)
+        for structured_only in (True, False):
+            for signature, spellings in groups:
+                for start, end, call in self._find_signature_calls(
+                    signature,
+                    working,
+                    structured_only,
+                ):
+                    matches.append((start, end, spellings, call.text))
+                    working = (
+                        working[:start]
+                        + "\x00" * (end - start)
+                        + working[end:]
+                    )
         return matches, working
 
     def tokenise_definition(
@@ -351,12 +384,12 @@ class Tokeniser:
         )
         hw_found: set[str] = set()
         match_log: list[dict] = []
-        for start, end, signature, call in matches:
-            hw_found.add(signature)
+        for start, end, spellings, call in matches:
+            hw_found.update(spellings)
             match_log.append({
-                'headword': signature,
+                'headword': spellings[0],
                 'call': call,
-                'normalised': self.normalise(signature),
+                'normalised': self.normalise(spellings[0]),
                 'positions': [(start, end)],
             })
 
@@ -515,19 +548,19 @@ class VDInstance:
         return {e.headword for e in self.entries[:stage]}
 
     def _validate_signatures(self, new_entries: list[Entry]) -> None:
-        signatures = self.signatures_by_stem
+        clauses: dict[str, list[HeadwordSignature]] = {}
+        for entry in self.entries:
+            clauses.setdefault(entry.signature.stem, []).append(entry.signature)
         for entry in new_entries:
-            existing = signatures.get(entry.signature.stem)
-            if (
-                existing is not None
-                and existing.formals != entry.signature.formals
-            ):
-                raise HeadwordSignatureConflictError(
-                    entry.signature.stem,
-                    existing.formals,
-                    entry.signature.formals,
-                )
-            signatures.setdefault(entry.signature.stem, entry.signature)
+            existing = clauses.setdefault(entry.signature.stem, [])
+            for other in existing:
+                if not other.compatible_with(entry.signature):
+                    raise HeadwordSignatureConflictError(
+                        entry.signature.stem,
+                        other.formals,
+                        entry.signature.formals,
+                    )
+            existing.append(entry.signature)
 
     def append(self, headword: str, definition: str) -> Entry:
         """
@@ -641,16 +674,32 @@ class VDInstance:
         signature.check(call)
         return signature, call
 
-    def entry_by_call(self, text: str) -> list[Entry]:
-        """All entries applicable to a bare, partial, or complete call."""
+    def clauses_for_call(self, text: str) -> list[Entry]:
+        """Every entry that defines the stem of the call, whatever form it requires."""
 
         resolved = self.resolve_call(text)
         if resolved is None:
             return []
-        signature, _ = resolved
+        _, call = resolved
         return [
             entry for entry in self.entries
-            if entry.signature == signature
+            if entry.signature.stem == call.stem
+        ]
+
+    def entry_by_call(self, text: str) -> list[Entry]:
+        """All entries that can answer a bare, partial, or complete call.
+
+        An entry whose signature requires a form that the supplied
+        arguments do not have cannot answer the call.
+        """
+
+        resolved = self.resolve_call(text)
+        if resolved is None:
+            return []
+        _, call = resolved
+        return [
+            entry for entry in self.entries
+            if entry.signature.matches(call)
         ]
 
     def instantiate_entry(self, index: int, call_text: str) -> str:
@@ -662,12 +711,12 @@ class VDInstance:
             raise HeadwordApplicationError(
                 f"no headword signature for {call_text!r}"
             )
-        signature, call = resolved
-        if entry.signature != signature:
+        _, call = resolved
+        if entry.signature.stem != call.stem:
             raise HeadwordApplicationError(
                 f"E{index} defines {entry.headword!r}, not {call_text!r}"
             )
-        return instantiate_definition(entry.definition, signature, call)
+        return instantiate_definition(entry.definition, entry.signature, call)
 
     def entry_by_index(self, i: int) -> Entry:
         return self.entries[i]
