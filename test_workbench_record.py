@@ -444,3 +444,56 @@ def test_composed_render_is_bounded_even_when_each_literal_is_permitted():
         successful_recalls += 1
     else:
         pytest.fail("a large composite render escaped the workbench resource bound")
+
+
+def test_flatten_is_a_recorded_command_with_its_own_hole_state():
+    record = start_record(DICTIONARY, "force_cart_0")
+    record = command(record, "expand", position=0, entry_index=0)
+    record = command(record, "flatten", "F/0", position=1, note="leave the acceleration as it stands")
+    hole = frame(record, "F/0")["holes"][1]
+    assert hole["resolution"] == "flatten"
+    assert hole["candidates"] == [] and hole["child_frame_id"] is None
+    assert frame(record, "F/0")["render"] == "{mass_cart} times acceleration_cart_0"
+    claim = latest(record)["prediction_set"]["predictions"][-1]
+    assert (claim["id"], claim["kind"]) == ("P2", "left_unexpanded")
+    assert claim["evidence"]["stimulus"] == "acceleration_cart_0"
+    assert record["events"][2]["kind"] == "flatten"
+    assert validate_record(record) == record
+    with pytest.raises(ValueError, match="already resolved"):
+        command(record, "flatten", "F/0", position=1)
+    with pytest.raises(ValueError, match="requires exactly position"):
+        apply_command(record, {"operation": "flatten", "frame_id": "F/0"})
+
+
+def test_issuing_freezes_what_each_result_rested_on():
+    fresh = start_record(DICTIONARY, "force_cart_0")
+    with pytest.raises(ValueError, match="open holes"):
+        command(fresh, "issue")
+    record = supplied_calculation()  # events 0-3: question, entry application, two inputs
+    with pytest.raises(ValueError, match="only the root"):
+        command(record, "issue", "F/0")
+    record = command(record, "reduce", "F/0", response="12 N")        # event 4
+    record = command(record, "reduce", response="Prediction: 12 N")   # 5
+    record = command(record, "issue", note="first answer")            # 6
+    when_issued = latest(record)["prediction_set"]
+    record = command(record, "reopen", "F/0")                         # 7
+    record = command(record, "reduce", "F/0", response="10 N")        # 8
+    record = command(record, "reduce", response="Prediction: 10 N")   # 9
+    record = command(record, "issue", note="redone")                  # 10
+    final = latest(record)["prediction_set"]
+    first, second = final["issued"]
+    assert (first["id"], first["demand"], first["result"]) == ("I6", "force_cart_0", "Prediction: 12 N")
+    assert first["prediction_ids"] == ["P0", "P1", "P2", "P3", "P4", "P5"]
+    assert first["prediction_ids"] == when_issued["current_prediction_ids"]
+    assert (second["id"], second["result"]) == ("I10", "Prediction: 10 N")
+    assert second["prediction_ids"] == ["P0", "P1", "P2", "P3", "P8", "P9"] == final["current_prediction_ids"]
+    assert first["dependency_selection_complete"] and second["dependency_selection_complete"]
+    assert first["statement"] == (
+        "The result 'Prediction: 12 N' holds for the demand 'force_cart_0' in the recorded context."
+    )
+    assert first["verification"] == second["verification"] == "unchecked"
+    # The first issue is not rewritten by the redo, and an issue is not itself a candidate.
+    assert when_issued["issued"] == [first]
+    assert all(item["operation"] != "issue" for item in final["predictions"])
+    assert final["schema_version"] == 4
+    assert validate_record(record) == record

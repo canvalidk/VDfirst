@@ -81,7 +81,8 @@ class TraceEvent:
 
     Every step that changes what the trace says carries ``change``: starting
     the trace, applying or recalling an entry, leaving a headword unexpanded,
-    supplying an input, a reduction, a wording clean-up and a reopening.
+    supplying an input, a reduction, a wording clean-up, a reopening and
+    issuing a result.
     Navigation events carry none.
     """
 
@@ -760,19 +761,49 @@ class Trace:
 
         positions = list(self.active.open_positions)
         if positions:
-            self._flatten(positions, _format_position_event(positions))
+            self._flatten(self.active, positions, _format_position_event(positions))
         return positions
 
     def flatten_active_position(self, pos: int) -> list[int]:
         """Flatten one open position on the active demand."""
 
         self.active._check_open_position(pos)
-        self._flatten([pos], f"active position {pos}")
+        self._flatten(self.active, [pos], f"active position {pos}")
         return [pos]
 
-    def _flatten(self, positions: list[int], detail: str) -> TraceEvent:
+    def flatten_node(self, node: Demand, positions: list[int], detail: str) -> TraceEvent:
+        """Leave the headwords at open positions of any attached demand unexpanded."""
+        positions = list(positions)
+        if not positions or len(set(positions)) != len(positions):
+            raise ValueError("flatten needs distinct positions")
+        for pos in positions:
+            node._check_open_position(pos)
+        return self._flatten(node, positions, detail)
+
+    def issue(self, detail: str) -> TraceEvent:
+        """Issue the root's current result as the trace's answer.
+
+        A step in its own right: the person declares that this result is the
+        prediction. The evidence freezes the result and the event indexes it
+        rests on at this moment. Nothing is locked; work recorded afterwards
+        (reopening and redoing, say) belongs to a later issue, and this one
+        keeps what it froze.
+        """
+        if not self.is_complete:
+            raise ValueError("cannot issue: the trace still has open holes")
+        root = self.snapshot(self.root)
+        support = self.root.claim_support()
+        asked = getattr(self.root.provenance, "text", "") or _snapshot_prose(root)
+        return self.record_event(
+            "issue", detail,
+            TraceChange(
+                asked, root.render, root, root,
+                dependencies=support.event_indexes, dependencies_complete=support.complete,
+            ),
+        )
+
+    def _flatten(self, node: Demand, positions: list[int], detail: str) -> TraceEvent:
         """Leave headwords unexpanded, as plain text, and record which ones."""
-        node = self.active
         before = self.snapshot(node)
         headwords = [node.headword_at(pos) for pos in positions]
         for pos, headword in zip(positions, headwords):

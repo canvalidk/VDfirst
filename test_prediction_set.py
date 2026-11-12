@@ -368,3 +368,37 @@ def test_rejected_or_skipped_reduction_does_not_generate_claim(sim):
         "set reduce off", "trace 5+6", "reduce", "mass", "reduce", "",
     ])
     assert [p.id for p in build_prediction_set(repl.trace).predictions] == ["P0"]
+
+
+def test_issue_is_refused_while_holes_are_open_and_old_style_issues_are_reported(sim):
+    trace = Trace.start(sim, "force")
+    with pytest.raises(ValueError, match="open holes"):
+        trace.issue("too early")
+    assert len(trace.events) == 1
+    trace.record_event("issue", "an old-style event with no evidence")
+    result = build_prediction_set(trace)
+    assert result.issued == ()
+    assert result.unrecorded_events == (1,)
+
+
+def test_an_issued_result_inherits_gaps_in_what_it_rested_on(sim):
+    trace = Trace.start(sim, "mass")
+    trace.root.resolve_recall(0, "2 kg", 0)  # filled without a recorded step
+    event = trace.issue("answer")
+    assert (event.change.stimulus, event.change.response) == ("mass", "2 kg")
+    issued = build_prediction_set(trace).issued[0]
+    assert (issued.id, issued.result, issued.prediction_ids) == ("I1", "2 kg", ("P0",))
+    assert not issued.dependency_selection_complete
+
+
+def test_flatten_node_validates_before_recording(sim):
+    trace = Trace.start(sim, "mass and force")
+    with pytest.raises(ValueError, match="distinct positions"):
+        trace.flatten_node(trace.root, [], "none")
+    with pytest.raises(ValueError, match="distinct positions"):
+        trace.flatten_node(trace.root, [0, 0], "twice")
+    trace.flatten_node(trace.root, [1], "one")
+    with pytest.raises(ValueError, match="already resolved"):
+        trace.flatten_node(trace.root, [0, 1], "partly filled")
+    assert trace.root.open_positions == [0]
+    assert len(trace.events) == 2

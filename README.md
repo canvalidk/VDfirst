@@ -113,4 +113,4 @@ from `workbench.py`. See [the versioned record contract](specs/2026-10-24-trace-
 python -m pytest -q
 ```
 
-Expected baseline: 534 passing tests.
+Expected baseline: 539 passing tests.

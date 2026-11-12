@@ -68,6 +68,26 @@ class Prediction:
 
 
 @dataclass(frozen=True)
+class IssuedResult:
+    """A result the person issued as the trace's answer, frozen when issued.
+
+    prediction_ids are the candidates the result rested on at that moment.
+    Work recorded after the issue does not change them: a result reached by
+    reopening and redoing is issued again and gets its own record.
+    """
+
+    id: str
+    event_index: int
+    demand: str
+    result: str
+    statement: str
+    prediction_ids: tuple[str, ...]
+    dependency_selection_complete: bool
+    evidence: TraceChange
+    verification: str = "unchecked"
+
+
+@dataclass(frozen=True)
 class PredictionSet:
     """An immutable partial set derived from the recorded history.
 
@@ -81,7 +101,7 @@ class PredictionSet:
     trace_complete: bool
     predictions: tuple[Prediction, ...]
     unrecorded_events: tuple[int, ...]
-    schema_version: int = 3
+    schema_version: int = 4
     scope: str = "recorded trace history"
     coverage_complete: bool = False
     limitations: tuple[str, ...] = (
@@ -91,11 +111,13 @@ class PredictionSet:
         "Current support is recorded step lineage, not a proof or a minimal semantic dependency set.",
         "Equivalence criteria and input fidelity require human interpretation.",
         "This is not the full disjunction of alternatives and gives no theory verdict.",
+        "An issued result records what it rested on when issued; whether it still stands is not decided here.",
         "Direct Demand mutations bypass recording; use the Trace recording methods.",
     )
     current_prediction_ids: tuple[str, ...] = ()
     historical_prediction_ids: tuple[str, ...] = ()
     dependency_selection_complete: bool = False
+    issued: tuple[IssuedResult, ...] = ()
 
     def to_dict(self) -> dict:
         """Return a fresh JSON-compatible object."""
@@ -161,8 +183,15 @@ def build_prediction_set(
     annotations = classifications or {}
     predictions = []
     unrecorded = []
+    issues = []
     started = False
     for index, event in enumerate(trace.events):
+        if event.kind == "issue":
+            if event.change is None:
+                unrecorded.append(index)
+            else:
+                issues.append((index, event.change))
+            continue
         kind = STEP_KINDS.get(event.kind)
         if kind is None:
             continue
@@ -194,9 +223,27 @@ def build_prediction_set(
     historical_ids = tuple(
         claim.id for claim in predictions if claim.id not in current_ids
     ) if selection_complete else ()
+    issued = []
+    for index, change in issues:
+        rested_on = tuple(f"P{i}" for i in change.dependencies if f"P{i}" in claim_ids)
+        earlier_gaps = any(i < index for i in unrecorded)
+        issued.append(IssuedResult(
+            id=f"I{index}", event_index=index, demand=change.stimulus, result=change.response,
+            statement=(
+                f"The result {change.response!r} holds for the demand "
+                f"{change.stimulus!r} in the recorded context."
+            ),
+            prediction_ids=rested_on,
+            dependency_selection_complete=(
+                started and change.dependencies_complete and not earlier_gaps
+                and len(rested_on) == len(change.dependencies)
+            ),
+            evidence=change,
+        ))
     return PredictionSet(
         result=trace.root.text(), trace_complete=trace.is_complete,
         predictions=tuple(predictions), unrecorded_events=tuple(unrecorded),
         current_prediction_ids=current_ids, historical_prediction_ids=historical_ids,
         dependency_selection_complete=selection_complete,
+        issued=tuple(issued),
     )
