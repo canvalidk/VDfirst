@@ -34,6 +34,7 @@ This file tracks which specs are active, historical, or only exploratory.
 | `2026-06-11-vd-degree0-return.md` | Implemented | Degree-0 return: parked gates, reduce pops a frame, `onward`, `back` removed per ADR 5. |
 | `2026-10-20-prediction-set-segment.md` | Implemented | Frozen response evidence, trace-derived prediction candidates, explicit categories and JSON export. |
 | `2026-10-24-prediction-correction.md` | Implemented | Parameterized prediction traces, current recorded support, consumer invalidation and correction demo. |
+| `2026-10-24-trace-workbench.md` | Implemented prototype | Versioned JSON records, exact command replay, frame/result/prediction snapshots and local website bridge. |
 
 ## Next Likely Spec Segments
 

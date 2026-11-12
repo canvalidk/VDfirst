@@ -27,6 +27,9 @@ as the implementation/test surface.
   objects.
 - `prediction_set.py` - immutable claim projection and current response support.
 - `correction_demo.py` - parameterized mistake/reopen/correction walkthrough.
+- `workbench.py` - bounded JSON trace records, commands, snapshots and exact replay.
+- `workbench_server.py` - stateless loopback-only website bridge.
+- `workbench_demo.py` - scripted full-record export for save/reopen examples.
 - `repl.py` - command loop for simulator inspection and trace commands.
 - `run_repl.py` - launcher for the Newton simulator REPL.
 - `newton.py` - Newton case study entries.
@@ -77,7 +80,13 @@ as the implementation/test surface.
   `down <pos>` revisits settled children. Reopening or changing a child clears
   consuming reductions up the parent chain while retaining their events.
   See `specs/2026-10-24-prediction-correction.md` and `correction_demo.py`.
-- Expected test result: 404 passing tests.
+- The version-1 workbench protocol can start small traces, expand/recall,
+  inject, reduce/reopen and clean literal prose. It stores exact dictionaries,
+  questions, commands, events, frame trees and prediction sets. Full replay
+  validates all saved snapshots before continuation; scientific claims remain
+  unchecked. The optional website bridge is stateless and loopback-only.
+  See `specs/2026-10-24-trace-workbench.md`.
+- Expected test result: 523 passing tests.
 - Next likely work: Design 2.1 interaction integration, richer trace
   presentation such as `tree` or `show <headword>`, and any automated
   compression-on-resolve UX if it is still wanted.
@@ -140,7 +149,8 @@ Deferred design questions:
 - Whether a full `tree` command should display the demand graph.
 - How much provenance should appear inline in `state`.
 - What the stable taxonomy and fields for typed human-input audit records are.
-- Whether trace save/restore or multi-trace sessions are needed.
+- Broader REPL save/restore and persistent multi-trace sessions (the workbench
+  has a separate bounded, versioned replay protocol).
 
 ## Working Pattern
 

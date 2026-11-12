@@ -31,3 +31,5 @@ current code are the implementation contract.
   and prediction candidate export.
 - `2026-10-24-prediction-correction.md` - integrated parameterized traces,
   current recorded support, and mistake/correction demo.
+- `2026-10-24-trace-workbench.md` - portable replayable records, local HTTP
+  bridge and live website workbench boundary.
