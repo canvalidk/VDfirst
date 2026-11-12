@@ -35,6 +35,15 @@ as the implementation/test surface.
 - `newton.py` - Newton case study entries.
 - `display.py`, `viz.py` - report rendering and graphviz output.
 - `vd_demo.py` - demo entry point.
+- `handtrace.py` - hand-trace recorder and ledger, independent of the
+  engine: frames, labelled steps, exact linear checks, visibility,
+  withdrawal, per-answer ledgers and hypothesis sets, JSON records with
+  replay. Spec: `specs/2026-11-08-hand-trace-ledger.md`.
+- `handtrace_example_*.py` - the 8 November spring and Atwood traces
+  encoded with `handtrace.py`; each is a script and a test module.
+  `handtrace_example_atwood_statuses.py` holds the Atwood's checked
+  statuses; `handtrace_example_atwood_cc.py` records the coupled-constraint
+  Atwood trace and `handtrace_example_atwood_compare.py` compares the two.
 - `test_*.py` - unit tests. Treat tests as the API contract.
 
 ## Current State
@@ -106,7 +115,7 @@ as the implementation/test surface.
   requires; when one entry is left the choice is forced, and the entry step
   records every clause and which fit (schema 5). Prototype: see
   `specs/2026-11-12-structured-arguments.md` and `member_list_demo.py`.
-- Expected test result: 590 passing tests.
+- Expected test result: 1404 passing tests and 1 skipped (1466 with the hand-trace examples).
 - Next likely work: Design 2.1 interaction integration, richer trace
   presentation such as `tree` or `show <headword>`, and any automated
   compression-on-resolve UX if it is still wanted.

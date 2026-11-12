@@ -15,6 +15,8 @@ Code-only repository for the Valid Dictionary (VD) engine.
 - Local website bridge: `workbench_server.py`
 - Newton case study: `newton.py`
 - Display/visualisation helpers: `display.py`, `viz.py`, `vd_demo.py`
+- Hand-trace recorder: `handtrace.py`, with worked examples
+  `handtrace_example_*.py` (independent of the engine)
 - Project documentation: `docs/`
 - Specs archive: `specs/`
 - Codex project context shelf: `codex_context/`
@@ -123,10 +125,30 @@ python workbench_demo.py > saved-trace.json
 The small Python API is `start_record`, `apply_command`, and `validate_record`
 from `workbench.py`. See [the versioned record contract](specs/2026-10-24-trace-workbench.md).
 
+## Hand traces
+
+`handtrace.py` records a trace worked by hand while the entries are
+unfinished: demand frames, labelled steps (ENTRY, INPUT, CONTRACT,
+READING, DERIVE, EXTERNAL, OPEN), exact arithmetic checks, a no-hidden-
+lookup rule, withdrawals, and per-answer ledgers and hypothesis sets.
+It cites the dictionary and never executes it. See
+`specs/2026-11-08-hand-trace-ledger.md`.
+
+The examples verify their ENTRY quotes against the Design 2.1 entries file
+(`DESIGN_2_1_DRAFT_1_ENTRIES.md` in VD-Newton). Point `VD_ENTRIES` at it;
+without it the examples still run and the quote checks are skipped.
+
+```powershell
+python handtrace_example_atwood.py            # print the Atwood trace and its ledger
+python handtrace.py validate RECORD.json      # check a saved record's digest and replay it
+python handtrace.py render RECORD.json        # print a saved record as Markdown
+pytest test_handtrace*.py handtrace_example_*.py
+```
+
 ## Tests
 
 ```powershell
 python -m pytest -q
 ```
 
-Expected baseline: 590 passing tests.
+Expected baseline: 1404 passing tests and 1 skipped (590 for the engine, the rest for the hand-trace recorder); 1466 with `handtrace_example_*.py`.
