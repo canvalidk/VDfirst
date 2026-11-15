@@ -38,7 +38,7 @@ def expanded_trace():
     calculation = trace.root.children()[0]
     trace.recall_node(sim, calculation, 0, 1, "recall E1")
     trace.recall_node(sim, calculation, 1, 2, "recall E2")
-    assert calculation.text() == "2 kg times 5 m/s^2"
+    assert calculation.text() == "{2 kg} times {5 m/s^2}"
     assert build_prediction_set(trace).dependency_selection_complete
     return trace, calculation
 
@@ -46,21 +46,24 @@ def expanded_trace():
 def test_demo_keeps_mistake_history_and_selects_corrected_support():
     stages = build_correction_demo()
     assert [s.prediction_set.result for s in stages] == [
-        "2 kg times 5 m/s^2", "12 N", "Prediction: 12 N",
-        "2 kg times 5 m/s^2", "Prediction: 10 N",
+        "{{2 kg} times {5 m/s^2}}", "{12 N}", "Prediction: 12 N",
+        "{{2 kg} times {5 m/s^2}}", "Prediction: 10 N",
     ]
     before = stages[2].prediction_set
     reopened = stages[3].prediction_set
     final = stages[4].prediction_set
-    # P0 is the question and P1 the entry application; both stay current throughout.
-    assert before.current_prediction_ids == ("P0", "P1", "P2", "P3", "P4", "P5")
-    assert reopened.current_prediction_ids == ("P0", "P1", "P2", "P3")
-    assert final.current_prediction_ids == ("P0", "P1", "P2", "P3", "P7", "P8")
-    assert final.historical_prediction_ids == ("P4", "P5")
+    # P0 is the question and P1 the entry application. P2-P4 and P5-P7 are the
+    # two values: an entry applied, its own headword left unexpanded, its text
+    # replaced. All eight stay current throughout.
+    values = tuple(f"P{index}" for index in range(8))
+    assert before.current_prediction_ids == values + ("P8", "P9")
+    assert reopened.current_prediction_ids == values
+    assert final.current_prediction_ids == values + ("P11", "P12")
+    assert final.historical_prediction_ids == ("P8", "P9")
     assert before.result == "Prediction: 12 N"  # frozen earlier stage
-    assert final.predictions[:6] == before.predictions
-    assert final.predictions[-2].evidence.stimulus == "2 kg times 5 m/s^2"
-    assert final.predictions[-1].evidence.dependencies == (0, 1, 2, 3, 7)
+    assert final.predictions[:10] == before.predictions
+    assert final.predictions[-2].evidence.stimulus == "{2 kg} times {5 m/s^2}"
+    assert final.predictions[-1].evidence.dependencies == (0, 1, 2, 3, 4, 5, 6, 7, 11)
     assert all(s.prediction_set.dependency_selection_complete for s in stages)
     assert all(not s.prediction_set.coverage_complete for s in stages)
     assert all(p.verification == "unchecked" for p in final.predictions)
@@ -68,14 +71,22 @@ def test_demo_keeps_mistake_history_and_selects_corrected_support():
 
 def test_demo_records_instantiated_demands_and_local_arguments():
     final = build_correction_demo()[-1].prediction_set
-    assert [p.evidence.stimulus for p in final.predictions if p.kind == "supplied_input"] == [
-        "mass_cart", "acceleration_cart_0",
+    # No value is supplied at a headword. Each demand is expanded into its
+    # definition, and the value replaces that definition's text.
+    assert not [p for p in final.predictions if p.kind == "supplied_input"]
+    assert [p.evidence.stimulus for p in final.predictions if p.kind == "entry_application"] == [
+        "force_cart_0", "mass_cart", "acceleration_cart_0",
+    ]
+    replaced = [p.evidence for p in final.predictions if p.kind == "meaning_preservation"][:2]
+    assert [(change.stimulus, change.response) for change in replaced] == [
+        ("supplied {mass} of cart", "2 kg"),
+        ("supplied {acceleration} of cart at 0", "5 m/s^2"),
     ]
     correction = final.predictions[-2].evidence
     assert correction.before.address == (0,)
     assert correction.before.source_index == 0
     assert correction.before.headwords == ("mass_cart", "acceleration_cart_0")
-    assert [a.text for a in correction.before.arguments] == ["2 kg", "5 m/s^2"]
+    assert [a.text for a in correction.before.arguments] == ["{2 kg}", "{5 m/s^2}"]
 
 
 def test_demo_records_the_question_and_the_entry_application():
@@ -83,7 +94,7 @@ def test_demo_records_the_question_and_the_entry_application():
     question, application = final.predictions[:2]
     assert (question.id, question.kind, question.operation) == ("P0", "normalization", "trace")
     assert question.evidence.stimulus == "force_cart_0"
-    assert question.evidence.response == "{force_cart_0}"
+    assert question.evidence.response == "force_cart_0"
     assert (application.id, application.kind, application.operation) == ("P1", "entry_application", "expand")
     use = application.evidence.entry
     assert (use.index, use.headword, use.definition) == (0, "force_p_t", "mass_p times acceleration_p_t")
@@ -155,7 +166,7 @@ def test_masked_cleanup_only_becomes_current_after_reopening():
     assert masked.historical_prediction_ids == ("P6",)
     trace.unreduce_node(calculation, "show the edited product")
     reopened = build_prediction_set(trace)
-    assert reopened.result == "2 kg multiplied by 5 m/s^2"
+    assert reopened.result == "{{2 kg} multiplied by {5 m/s^2}}"
     assert reopened.current_prediction_ids == ("P0", "P1", "P2", "P3", "P6")
     assert reopened.historical_prediction_ids == ("P4", "P5")
 
@@ -165,7 +176,7 @@ def test_compression_keeps_child_support():
     trace.reduce_node(calculation, "10 N", "calculation")
     trace.root.set_compression(0, True)
     result = build_prediction_set(trace)
-    assert result.result == "force_cart_0"
+    assert result.result == "{force_cart_0}"
     assert result.current_prediction_ids == ("P0", "P1", "P2", "P3", "P4")
 
 
@@ -195,9 +206,11 @@ def test_invalid_unreduce_does_not_mutate_history():
 
 def test_parameterized_repl_records_candidates_and_correction():
     """Use only commands available to a reader, including revisiting the child."""
+    # Each expansion offers to replace the definition's text. The first offer
+    # is declined; the next two take the values.
     commands = iter([
-        "set cleanup off", "set reduce off", "trace force_cart_0", "expand",
-        "inject 0", "2 kg", "up", "inject 1", "5 m/s^2", "up",
+        "set cleanup off", "set reduce off", "trace force_cart_0", "expand", "",
+        "expand 0", "2 kg", "expand 1", "5 m/s^2",
         "reduce", "12 N", "reduce", "Prediction: 12 N",
         "down 0", "unreduce", "predictions", "reduce", "10 N",
         "reduce", "Prediction: 10 N", "predictions", "predictions json",
@@ -216,16 +229,20 @@ def test_parameterized_repl_records_candidates_and_correction():
     data = json.loads(output[-1])
     assert calculation.reduced == "10 N"
     assert data["result"] == "Prediction: 10 N"
-    assert data["schema_version"] == 5
+    assert data["schema_version"] == 6
     assert data["dependency_selection_complete"]
     assert len(data["historical_prediction_ids"]) == 2
     assert any("[history only]" in line for line in output)
     assert any("[current support]" in line for line in output)
-    assert [p["kind"] for p in data["predictions"][:3]] == [
-        "normalization", "entry_application", "supplied_input",
+    assert [p["kind"] for p in data["predictions"][:5]] == [
+        "normalization", "entry_application",
+        "entry_application", "left_unexpanded", "meaning_preservation",
     ]
     assert data["predictions"][1]["evidence"]["entry"]["bindings"] == [["p", "cart"], ["t", "0"]]
     assert data["predictions"][2]["evidence"]["stimulus"] == "mass_cart"
+    assert data["predictions"][4]["evidence"]["stimulus"] == "supplied {mass} of cart"
+    assert data["predictions"][4]["evidence"]["response"] == "2 kg"
+    assert "expanded E1 at position 0; text replaced." in output
 
 
 @pytest.mark.parametrize("change", ["node cleanup", "recall cleanup", "injection"])
@@ -267,29 +284,30 @@ def test_filling_a_hole_without_a_recorded_step_leaves_a_selection_gap(change):
 
 def test_reopening_invalidates_all_consumers_but_preserves_a_sibling():
     sim = simulator()
-    trace = Trace.start(sim, "force_cart_0 and force_other_0")
-
-    def supply(node, pos, text):
-        child = Demand(sim.analyse(text))
-        trace.inject_node(node, pos, child, text, "supplied")
-        return child
-
-    middle = supply(trace.root, 0, "force_cart_0")          # event 1
-    leaf = supply(middle, 0, "2 kg times 5 m/s^2")          # event 2
-    sibling = supply(trace.root, 1, "5 kg times 2 m/s^2")   # event 3
-    trace.reduce_node(leaf, "12 N", "mistake")                          # 4
-    trace.reduce_node(middle, "12 N", "consumer")                       # 5
-    trace.reduce_node(sibling, "10 N", "independent calculation")       # 6
-    trace.reduce_node(trace.root, "combined report", "outer consumer")  # 7
+    trace = Trace.start(sim, "force_cart_0 and force_other_0")              # event 0
+    trace.expand_node(sim, trace.root, 0, 0, "the cart's force")            # 1
+    middle = trace.root.children()[0]
+    trace.expand_node(sim, middle, 0, 1, "the cart's mass")                 # 2
+    leaf = middle.children()[0]
+    trace.flatten_node(leaf, [0], "its own headword")                       # 3
+    trace.flatten_node(middle, [1], "acceleration left unexpanded")         # 4
+    # The other force is given outright: events 5 (entry), 6 (its two
+    # headwords left unexpanded) and 7 (its text replaced).
+    trace.expand_node(sim, trace.root, 1, 0, "the other force", replacement="10 N")
+    sibling = trace.root.children()[1]
+    trace.reduce_node(leaf, "3 kg", "mistake")                              # 8
+    trace.reduce_node(middle, "12 N", "consumer")                           # 9
+    trace.reduce_node(trace.root, "combined report", "outer consumer")      # 10
     trace.unreduce_node(leaf, "reopen")
     assert middle.reduced is None
     assert trace.root.reduced is None
     assert sibling.reduced == "10 N"
     result = build_prediction_set(trace)
-    # The question, the three supplied texts and the sibling's reduction remain;
-    # the mistake and both of its consumers are history.
-    assert result.current_prediction_ids == ("P0", "P1", "P2", "P3", "P6")
-    assert result.historical_prediction_ids == ("P4", "P5", "P7")
+    # The question, the entry steps, the headwords left unexpanded and the
+    # sibling's replacement remain; the mistake and both of its consumers
+    # are history.
+    assert result.current_prediction_ids == ("P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7")
+    assert result.historical_prediction_ids == ("P8", "P9", "P10")
 
 
 def test_down_rejects_invalid_navigation_without_changing_the_trace():
@@ -317,8 +335,8 @@ def test_demo_command_line(mode):
         command.append("--interactive")
         completed = subprocess.run(
             command, text=True, input="\n".join([
-                "set cleanup off", "set reduce off", "trace force_cart_0", "expand",
-                "inject 0", "2 kg", "up", "inject 1", "5 m/s^2", "up",
+                "set cleanup off", "set reduce off", "trace force_cart_0", "expand", "",
+                "expand 0", "2 kg", "expand 1", "5 m/s^2",
                 "reduce", "12 N", "reduce", "Prediction: 12 N",
                 "down 0", "unreduce", "reduce", "10 N",
                 "reduce", "Prediction: 10 N", "predictions", "quit", "",
@@ -335,5 +353,6 @@ def test_demo_command_line(mode):
         assert data["stages"][-1]["prediction_set"]["result"] == "Prediction: 10 N"
     else:
         assert "4. Calculation reopened" in output
-        assert "P4 [history only; calculation; unchecked]" in output
-        assert "P7 [current support; calculation; unchecked]" in output
+        assert "P8 [history only; calculation; unchecked]" in output
+        assert "P11 [current support; calculation; unchecked]" in output
+        assert "P4 [current support; parameter input; unchecked] 'supplied {mass} of cart' -> '2 kg'" in output

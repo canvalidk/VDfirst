@@ -269,8 +269,8 @@ def test_a_plain_clause_beside_a_pattern_leaves_a_choice_to_the_person():
 def test_the_member_list_scene_reproduces_the_hand_recorded_answers(sim):
     a = build_prediction_set(trace_object(sim, "A"))
     b = build_prediction_set(trace_object(sim, "B"))
-    assert a.issued[-1].result == "-23/10 m/s^2"
-    assert b.issued[-1].result == "-24/5 m/s^2"
+    assert a.issued[-1].result == "{-23/10 m/s^2}"
+    assert b.issued[-1].result == "{-24/5 m/s^2}"
     for result in (a, b):
         assert result.trace_complete and result.dependency_selection_complete
         assert result.unrecorded_events == ()
@@ -289,7 +289,9 @@ def test_every_split_and_dispatch_in_the_scene_is_forced_by_form(sim):
     # Three members and the empty remainder; three members dispatched on action or
     # reaction; three action laws dispatched on the kind of acting-object.
     assert by_stem == {"contribution": 4, "impressed-force": 3, "action-force": 3}
-    assert len(applications) - len(forced) == 3      # acceleration, net force, reaction by negation
+    # Acceleration, net force and reaction by negation, and the eight definitions
+    # whose text a value replaces. None of the eleven has a second clause.
+    assert len(applications) - len(forced) == 11
     # No entry application in the scene was a choice a person made.
     assert all(len(claim.evidence.entry.candidates) == 1 for claim in applications)
 
@@ -315,7 +317,16 @@ def test_the_list_itself_is_the_one_thing_a_person_supplies_about_membership(sim
     membership = [claim for claim in supplied if claim.evidence.stimulus == "contribution_A"]
     assert len(membership) == 1
     assert membership[0].evidence.response == f"contribution_A_{MEMBERS['A']}"
-    assert len(supplied) == 9      # the list, haze, inertial mass, two springs' two values, mass and field for gravity
+    assert len(supplied) == 1      # the list and nothing else
+    # Haze, inertial mass, two springs' two values, and mass and field for gravity
+    # are not supplied at a headword: each replaces the text of a definition.
+    value_entries = {
+        "haze_p", "inertial-mass_p", "stiffness_s", "displacement_s",
+        "gravitational-mass_q", "field-strength",
+    }
+    applied = [claim for claim in result.predictions
+               if claim.kind == "entry_application" and claim.evidence.entry.headword in value_entries]
+    assert len(applied) == 8
 
 
 def test_a_member_of_no_known_form_stops_the_trace_instead_of_guessing(sim):
@@ -336,7 +347,10 @@ def test_the_engine_does_not_police_what_the_supplied_list_contains(sim):
 
 
 def test_repl_expands_a_forced_choice_without_asking():
-    lines = iter(["set cleanup off", "set reduce off", "trace contribution_A_[]", "expand", "state"])
+    lines = iter([
+        "set cleanup off", "set reduce off", "set replace off",
+        "trace contribution_A_[]", "expand", "state",
+    ])
     output = []
 
     def read(prompt):
@@ -347,7 +361,7 @@ def test_repl_expands_a_forced_choice_without_asking():
 
     repl = REPL(build_demo_simulator(), input_fn=read, print_fn=output.append)
     repl.run()
-    assert repl.trace.root.text() == "the zero vector"
+    assert repl.trace.root.text() == "{the zero vector}"
     assert not any("multiple entries" in line for line in output)
 
 
@@ -363,5 +377,5 @@ def test_the_bridge_offers_only_the_definitions_whose_form_fits():
     claim = record["snapshots"][-1]["prediction_set"]["predictions"][-1]
     assert claim["evidence"]["entry"]["clauses"] == [[2, "contribution_p_[]"], [3, "contribution_p_[m|rest]"]]
     assert claim["evidence"]["entry"]["candidates"] == [3]
-    assert record["snapshots"][-1]["prediction_set"]["schema_version"] == 5
+    assert record["snapshots"][-1]["prediction_set"]["schema_version"] == 6
     assert validate_record(json.loads(json.dumps(record))) == record

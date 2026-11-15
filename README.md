@@ -36,12 +36,24 @@ Type `help` in the REPL for the command list. Core commands include
 `count`, `headwords`, `recall <headword>`, and `trace <text>`. In trace
 mode use `expand`, `recall`, `inject`, `flatten`, `return`, `events`,
 `worklist`, `goto N` / `go to N`, `state`, `up`, `onward`, `reduce`,
-`unreduce`, `fold`, `tidy`, `set`, and `cancel`.
+`unreduce`, `fold`, `tidy`, `brace`, `unbrace`, `set`, and `cancel`.
 Use `down <pos>` to revisit a settled child calculation for inspection or
 correction.
 
-Use `predictions` to inspect recorded meaning-preservation and supplied-input
-claims. `classify P2 correct maths` or `classify P1 parameter input` attaches
+In the text of a trace a bare headword is still to be expanded. Braces stand
+round one that has been dealt with: `{mass times acceleration}` is an expanded
+headword, with the braces showing where its definition's text begins and ends,
+and `{mass}` is a headword left unexpanded on purpose (`flatten`). The braces
+are plain text; `unbrace <pos>` takes a pair out as a recorded edit.
+
+A value never answers a bare headword. `expand` shows the definition's text and
+offers to replace it before it goes in, so the record says what a value was
+given for: the wording of one entry. `inject` takes only a fuller call of the
+demanded headword, such as the list of members. See
+[the spec](specs/2026-11-15-braces-and-replacement-at-expansion.md).
+
+Use `predictions` to inspect the recorded steps. `classify P5 correct maths`
+or `classify P2 parameter input` attaches
 your category; it does not verify the claim. `predictions json` prints the
 structured export, including before/after evidence and trace addresses.
 
@@ -49,7 +61,7 @@ The projection retains history and selects recorded claims supporting the
 current result. The full prediction-set disjunction and semantic checking
 remain deferred. See [the worked example](docs/examples/prediction-set.md).
 
-For a self-contained example with two parameter inputs and one reduction:
+For a self-contained example with two values and one reduction:
 
 ```powershell
 python prediction_demo.py
@@ -129,4 +141,4 @@ from `workbench.py`. See [the versioned record contract](specs/2026-10-24-trace-
 python -m pytest -q
 ```
 
-Expected baseline: 590 passing tests.
+Expected baseline: 633 passing tests.

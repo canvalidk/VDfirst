@@ -60,6 +60,16 @@ def sim_with_cycle() -> Simulator:
     return Simulator(v)
 
 
+@pytest.fixture
+def param_sim() -> Simulator:
+    v = VDInstance("param")
+    v.append_many([
+        ("mass_p", "what the scale reads for p"),
+        ("force_p", "mass_p times 5"),
+    ])
+    return Simulator(v)
+
+
 def drive(sim: Simulator, inputs: list[str]) -> list[str]:
     out = []
     it = iter(inputs)
@@ -70,11 +80,15 @@ def drive(sim: Simulator, inputs: list[str]) -> list[str]:
         except StopIteration as exc:
             raise EOFError from exc
 
-    REPL(
+    repl = REPL(
         sim,
         input_fn=input_fn,
         print_fn=lambda *args: out.append(" ".join(str(a) for a in args)),
-    ).run()
+    )
+    # These scripts predate the offer to replace a definition's text at
+    # expansion; that offer has its own tests in test_braces_and_replacement.py.
+    repl.replace_policy = "off"
+    repl.run()
     return out
 
 
@@ -93,6 +107,9 @@ def drive_repl(sim: Simulator, inputs: list[str]) -> tuple[REPL, list[str]]:
         input_fn=input_fn,
         print_fn=lambda *args: out.append(" ".join(str(a) for a in args)),
     )
+    # These scripts predate the offer to replace a definition's text at
+    # expansion; that offer has its own tests in test_braces_and_replacement.py.
+    repl.replace_policy = "off"
     repl.run()
     return repl, out
 
@@ -116,18 +133,23 @@ EXPECTED_HELP = [
         "cleanup offers: on_settled_only|on_every_resolution|off",
     ),
     help_line("set reduce <on_settle|off>", "toggle reduce offers on settle"),
+    help_line(
+        "set replace <on_expand|off>",
+        "toggle the offer to replace a definition's text",
+    ),
     help_line("trace <text>", "start a new trace"),
     "",
     "trace-only:",
+    help_line("brace <pos>", "put back the braces round a filled position"),
     help_line("cancel", "abandon the entire trace"),
     help_line("classify <id> <category>", "label a prediction; does not verify it"),
     help_line("down <pos>", "inspect a child, including settled calculations"),
     help_line("events", "show trace event history"),
     help_line("expand [pos]", "expand an open hole into a dictionary entry"),
-    help_line("flatten [pos|all]", "make active open holes inert literals"),
+    help_line("flatten [pos|all]", "leave open headwords unexpanded, in braces"),
     help_line("fold", "offer reduce across settled nodes, leaves-up"),
     help_line("go to N, goto N", "move active focus to worklist entry N"),
-    help_line("inject [pos]", "fill an open hole with user-supplied text"),
+    help_line("inject [pos]", "supply a fuller call of an open headword"),
     help_line("onward", "leave settled frames for the deepest open ancestor"),
     help_line("predictions [json]", "show trace-derived claims or export JSON"),
     help_line("reduce", "replace the active node's render with equivalent text"),
@@ -137,6 +159,7 @@ EXPECTED_HELP = [
         "tidy [scope]",
         "sweep settled prose for cleanup (active|subtree|all)",
     ),
+    help_line("unbrace <pos>", "take out the braces round a filled position"),
     help_line("unreduce", "clear the active node's reduction"),
     help_line("up", "move active focus to the parent demand"),
     help_line("worklist", "list all open holes across the tree"),
@@ -150,7 +173,8 @@ def worklist_line(
     pos: int,
     headword: str,
 ) -> str:
-    return f"{marker} [{index}] {tag:<12} pos {pos}  ->  {{{headword}}}"
+    # A headword still to be expanded is bare; braces mark one dealt with.
+    return f"{marker} [{index}] {tag:<12} pos {pos}  ->  {headword}"
 
 
 class TestTraceBootstrap:
@@ -159,7 +183,7 @@ class TestTraceBootstrap:
         assert drive(trace_sim, ["trace force"]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
         ]
 
@@ -182,7 +206,7 @@ class TestTraceBootstrap:
         assert drive(trace_sim, ["trace force", "trace mass"]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
             "trace only valid outside a trace; use 'cancel' first",
         ]
@@ -235,11 +259,11 @@ class TestExpand:
         assert drive(trace_sim, ["trace force", "expand", "state"]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
             "expanded E2 at position 0; now at child.",
             "at: E2 @ parent pos 0",
-            "{mass} times {acceleration}",
+            "mass times acceleration",
             "open positions: 0, 1",
         ]
 
@@ -247,7 +271,7 @@ class TestExpand:
         assert drive(trace_sim, ["trace force and mass", "expand 1"]) == [
             "trace started.",
             "at: root",
-            "{force} and {mass}",
+            "force and mass",
             "open positions: 0, 1",
             "expanded E0 at position 1; now at child.",
         ]
@@ -256,21 +280,21 @@ class TestExpand:
         assert drive(sim_with_redefines, ["trace mass", "expand", "2"]) == [
             "trace started.",
             "at: root",
-            "{mass}",
+            "mass",
             "open positions: 0",
             "multiple entries for 'mass':",
             "  E0: first definition",
             "  E2: second definition",
             "expanded E2 at position 0; now at child.",
             "trace complete.",
-            "second definition",
+            "{second definition}",
         ]
 
     def test_expand_invalid_position_is_rejected(self, trace_sim):
         assert drive(trace_sim, ["trace force", "expand x"]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
             "invalid position",
         ]
@@ -297,12 +321,12 @@ class TestTraceRecall:
         ]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
             "expanded E2 at position 0; now at child.",
             "recalled E0 at position 0.",
             "at: E2 @ parent pos 0",
-            "2 kg times {acceleration}",
+            "{2 kg} times acceleration",
             "open positions: 1",
         ]
 
@@ -316,7 +340,7 @@ class TestTraceRecall:
         ])
         assert out[-2:] == [
             "trace complete.",
-            "2 kg times 5 m/s^2",
+            "{{2 kg} times {5 m/s^2}}",
         ]
 
     def test_recall_rejects_closed_position(self, trace_sim):
@@ -332,28 +356,58 @@ class TestTraceRecall:
 
 class TestInject:
 
-    def test_inject_creates_child_and_moves_to_it(self, trace_sim):
+    def test_inject_takes_a_fuller_call_and_moves_to_it(self, param_sim):
+        assert drive(param_sim, [
+            "trace mass",
+            "inject",
+            "mass_cart",
+            "state",
+            "events",
+        ]) == [
+            "trace started.",
+            "at: root",
+            "mass",
+            "open positions: 0",
+            "injected at position 0; now at child.",
+            "at: injected @ parent pos 0",
+            "mass_cart",
+            "open positions: 0",
+            "[0] trace: started from 'mass'",
+            "[1] inject: position 0: mass_cart",
+        ]
+
+    def test_inject_refuses_prose_and_records_nothing(self, trace_sim):
         assert drive(trace_sim, [
             "trace force",
             "inject",
             "mass of this object",
             "state",
+            "events",
         ]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
-            "injected at position 0; now at child.",
-            "at: injected @ parent pos 0",
-            "{mass} of this object",
+            "'mass of this object' is not a fuller call of 'force'; a value "
+            "goes in through a definition: expand an entry and replace its text",
+            "at: root",
+            "force",
             "open positions: 0",
+            "[0] trace: started from 'force'",
         ]
+
+    def test_inject_refuses_a_call_of_another_headword(self, param_sim):
+        out = drive(param_sim, ["trace mass", "inject", "force_cart"])
+        assert out[-1] == (
+            "'force_cart' is not a fuller call of 'mass'; a value "
+            "goes in through a definition: expand an entry and replace its text"
+        )
 
     def test_inject_empty_text_aborts(self, trace_sim):
         assert drive(trace_sim, ["trace force", "inject", ""]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
             "inject aborted: no text",
         ]
@@ -372,14 +426,14 @@ class TestFlatten:
         ]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
             "expanded E2 at position 0; now at child.",
             "flattened positions 0, 1.",
             "trace complete.",
-            "mass times acceleration",
+            "{{mass} times {acceleration}}",
             "at: E2 @ parent pos 0",
-            "mass times acceleration",
+            "{mass} times {acceleration}",
             "open positions: none",
         ]
 
@@ -392,12 +446,12 @@ class TestFlatten:
         ]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
             "expanded E2 at position 0; now at child.",
             "flattened position 1.",
             "at: E2 @ parent pos 0",
-            "{mass} times acceleration",
+            "mass times {acceleration}",
             "open positions: 0",
         ]
 
@@ -406,7 +460,7 @@ class TestFlatten:
         assert out[-3:] == [
             "flattened positions 0, 1.",
             "trace complete.",
-            "mass times acceleration",
+            "{{mass} times {acceleration}}",
         ]
 
     def test_flattened_terms_can_be_exported_as_escaped_text(self, trace_sim):
@@ -418,10 +472,10 @@ class TestFlatten:
 
         assert repl.trace is not None
         escaped = repl.trace.active.escaped_text()
-        assert escaped == "`mass` times `acceleration`"
+        assert escaped == "{`mass`} times {`acceleration`}"
         analysed = trace_sim.analyse(escaped)
         assert analysed.order == 0
-        assert analysed.text == "mass times acceleration"
+        assert analysed.text == "{mass} times {acceleration}"
 
     def test_flatten_leaves_resolved_positions_unchanged(self, trace_sim):
         out = drive(trace_sim, [
@@ -434,7 +488,7 @@ class TestFlatten:
         assert out[-3:] == [
             "flattened position 1.",
             "trace complete.",
-            "2 kg times acceleration",
+            "{{2 kg} times {acceleration}}",
         ]
 
     def test_flatten_with_no_open_positions_reports_noop(self, trace_sim):
@@ -464,12 +518,12 @@ class TestNavigationAndBack:
         assert drive(trace_sim, ["trace force", "expand", "up", "state"]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
             "expanded E2 at position 0; now at child.",
             "moved up.",
             "at: root",
-            "{mass} times {acceleration}",
+            "{mass times acceleration}",
             "open positions: none",
         ]
 
@@ -486,7 +540,7 @@ class TestNavigationAndBack:
         assert out[-4:] == [
             "returned to parent.",
             "at: root",
-            "mass times acceleration",
+            "{{mass} times {acceleration}}",
             "open positions: none",
         ]
         assert repl.trace is not None
@@ -518,7 +572,7 @@ class TestNavigationAndBack:
         assert drive(trace_sim, ["trace force", "up"]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
             "already at root",
         ]
@@ -545,7 +599,7 @@ class TestWorklist:
         assert drive(trace_sim, ["trace force", "worklist"]) == [
             "trace started.",
             "at: root",
-            "{force}",
+            "force",
             "open positions: 0",
             worklist_line("*", 0, "root", 0, "force"),
         ]
@@ -629,13 +683,13 @@ class TestReduceCommand:
         ])
         assert out[-4:] == [
             "current render:",
-            "  2 kg times 5 m/s^2",
+            "  {2 kg} times {5 m/s^2}",
             "reduced.",
             "returned to parent.",
         ]
         assert repl.trace is not None
         assert repl.trace.root.children()[0].reduced == "15"
-        assert repl.trace.root.text() == "15"
+        assert repl.trace.root.text() == "{15}"
 
     def test_reduce_pops_one_frame_on_success(self, trace_sim):
         repl, out = drive_repl(trace_sim, [
@@ -685,7 +739,8 @@ class TestReduceCommand:
         assert out[-1] == (
             "['mass'] are headwords; reduction takes non-headword "
             "prose only. To use the word literally, escape it; "
-            "to reference it, expand."
+            "to reference it, expand. A headword left unexpanded in "
+            "this text may be kept by writing it in braces."
         )
 
     def test_reduce_empty_input_aborts(self, trace_sim):
@@ -719,7 +774,7 @@ class TestReduceCommand:
         assert repl.trace is not None
         assert repl.trace.active is repl.trace.root
         assert repl.trace.root.reduced is None
-        assert repl.trace.root.text() == "15"
+        assert repl.trace.root.text() == "{15}"
 
     def test_unreduce_refused_when_not_reduced(self, trace_sim):
         out = drive(trace_sim, [
@@ -794,11 +849,11 @@ class TestFold:
         assert out[-9:] == [
             "fold: E2 @ parent pos 0",
             "current render:",
-            "  2 kg times 5 m/s^2",
+            "  {2 kg} times {5 m/s^2}",
             "reduced.",
             "fold: root",
             "current render:",
-            "  10",
+            "  {10}",
             "reduced.",
             "fold complete: 2 reduced, 0 skipped.",
         ]
@@ -822,7 +877,7 @@ class TestFold:
         assert out[-4:] == [
             "fold: root",
             "current render:",
-            "  ten newtons",
+            "  {ten newtons}",
             "fold complete: 0 reduced, 1 skipped.",
         ]
         assert sum(line.startswith("fold: ") for line in out) == 1
@@ -880,7 +935,7 @@ class TestSettleOffers:
         ])
         assert out[-2:] == [
             "trace complete.",
-            "2 kg times 5 m/s^2",
+            "{{2 kg} times {5 m/s^2}}",
         ]
 
     def test_set_reduce_off_disables_offers(self, trace_sim):
@@ -999,7 +1054,7 @@ class TestTidy:
             "tidy complete: 1 cleaned, 2 skipped.",
         ]
         assert repl.trace is not None
-        assert repl.trace.active.text() == "2 kg multiplied by 5 m/s^2"
+        assert repl.trace.active.text() == "{2 kg} multiplied by {5 m/s^2}"
 
     def test_tidy_cleans_recall_text(self, trace_sim):
         repl, out = drive_repl(trace_sim, [
@@ -1017,7 +1072,7 @@ class TestTidy:
         ])
         assert out[-1] == "tidy complete: 1 cleaned, 2 skipped."
         assert repl.trace is not None
-        assert repl.trace.active.text() == "two kilograms times 5 m/s^2"
+        assert repl.trace.active.text() == "{two kilograms} times {5 m/s^2}"
 
     def test_tidy_skips_cleaned_and_reoffers_skipped(self, trace_sim):
         repl, out = drive_repl(trace_sim, [
@@ -1149,7 +1204,7 @@ class TestCleanupOffers:
         assert out[-4:] == [
             "cleaned.",
             "at: E2 @ parent pos 0",
-            "2 kilograms times {acceleration}",
+            "{2 kilograms} times acceleration",
             "open positions: 1",
         ]
 
@@ -1176,19 +1231,20 @@ class TestCleanupOffers:
             "to reference it, expand."
         )
 
-    def test_inject_settled_child_gets_offer(self, trace_sim):
-        out = drive(trace_sim, [
+    def test_a_value_typed_at_a_headword_is_refused(self, trace_sim):
+        repl, out = drive_repl(trace_sim, [
             "set reduce off",
             "trace force",
             "inject",
             "42 newtons",
-            "forty-two newtons",
         ])
-        assert out[-3:] == [
-            "cleaned.",
-            "trace complete.",
-            "forty-two newtons",
-        ]
+        assert out[-1] == (
+            "'42 newtons' is not a fuller call of 'force'; a value "
+            "goes in through a definition: expand an entry and replace its text"
+        )
+        assert repl.trace is not None
+        assert [event.kind for event in repl.trace.events] == ["trace"]
+        assert repl.trace.root.text() == "force"
 
     def test_expand_offer_under_on_every_resolution(self, trace_sim):
         repl, out = drive_repl(trace_sim, [
@@ -1203,7 +1259,7 @@ class TestCleanupOffers:
         assert out[-1] == "cleaned."
         assert repl.trace is not None
         assert repl.trace.active.text() == (
-            "{mass} multiplied by {acceleration}"
+            "mass multiplied by acceleration"
         )
 
     def test_set_cleanup_off_disables_offers(self, trace_sim):
@@ -1216,7 +1272,7 @@ class TestCleanupOffers:
         ])
         assert out[-3:] == [
             "at: E2 @ parent pos 0",
-            "2 kg times {acceleration}",
+            "{2 kg} times acceleration",
             "open positions: 1",
         ]
 
@@ -1227,7 +1283,7 @@ class TestCleanupOffers:
 
     def test_set_unknown_name_prints_usage(self, trace_sim):
         assert drive(trace_sim, ["set foo bar"])[-1] == (
-            "usage: set <reduce|cleanup> <policy>"
+            "usage: set <reduce|replace|cleanup> <policy>"
         )
 
 
@@ -1238,25 +1294,23 @@ class TestEvents:
             "[0] trace: started from 'force'"
         )
 
-    def test_expand_recall_inject_flatten_record_events(self, trace_sim):
+    def test_expand_recall_flatten_record_events(self, trace_sim):
+        # The inject event is covered in TestInject, with a fuller call.
         out = drive(trace_sim, [
             "trace force and string",
             "expand 0",
             "recall 0",
             "",
             "up",
-            "inject 1",
-            "mass",
             "flatten",
             "",
             "events",
         ])
-        assert out[-5:] == [
+        assert out[-4:] == [
             "[0] trace: started from 'force and string'",
             "[1] expand: E2 at position 0",
             "[2] recall: E0 at position 0",
-            "[3] inject: position 1: mass",
-            "[4] flatten: active position 0",
+            "[3] flatten: active position 1",
         ]
 
 

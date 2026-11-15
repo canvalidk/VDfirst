@@ -14,6 +14,7 @@ from demand import (
     InjectResolution,
     RecallResolution,
     Trace,
+    split_response,
 )
 from simulator import Simulator
 from prediction_set import Classification, build_prediction_set
@@ -51,9 +52,11 @@ class REPL:
         self.input_fn = input_fn
         self.print_fn = print_fn
         self.reduce_policy = "on_settle"
+        self.replace_policy = "on_expand"
         self.cleanup_policy = "on_settled_only"
         self.dispatch = {
             "all_headwords": self.cmd_headwords,
+            "brace": self.cmd_brace,
             "cancel": self.cmd_cancel,
             "classify": self.cmd_classify,
             "down": self.cmd_down,
@@ -76,6 +79,7 @@ class REPL:
             "state": self.cmd_state,
             "tidy": self.cmd_tidy,
             "trace": self.cmd_trace,
+            "unbrace": self.cmd_unbrace,
             "unreduce": self.cmd_unreduce,
             "up": self.cmd_up,
             "worklist": self.cmd_worklist,
@@ -138,18 +142,23 @@ class REPL:
                 "cleanup offers: on_settled_only|on_every_resolution|off",
             ),
             ("set reduce <on_settle|off>", "toggle reduce offers on settle"),
+            (
+                "set replace <on_expand|off>",
+                "toggle the offer to replace a definition's text",
+            ),
             ("trace <text>", "start a new trace"),
         ]
         trace_only = [
+            ("brace <pos>", "put back the braces round a filled position"),
             ("cancel", "abandon the entire trace"),
             ("classify <id> <category>", "label a prediction; does not verify it"),
             ("down <pos>", "inspect a child, including settled calculations"),
             ("events", "show trace event history"),
             ("expand [pos]", "expand an open hole into a dictionary entry"),
-            ("flatten [pos|all]", "make active open holes inert literals"),
+            ("flatten [pos|all]", "leave open headwords unexpanded, in braces"),
             ("fold", "offer reduce across settled nodes, leaves-up"),
             ("go to N, goto N", "move active focus to worklist entry N"),
-            ("inject [pos]", "fill an open hole with user-supplied text"),
+            ("inject [pos]", "supply a fuller call of an open headword"),
             ("onward", "leave settled frames for the deepest open ancestor"),
             ("predictions [json]", "show trace-derived claims or export JSON"),
             ("reduce", "replace the active node's render with equivalent text"),
@@ -159,6 +168,7 @@ class REPL:
                 "tidy [scope]",
                 "sweep settled prose for cleanup (active|subtree|all)",
             ),
+            ("unbrace <pos>", "take out the braces round a filled position"),
             ("unreduce", "clear the active node's reduction"),
             ("up", "move active focus to the parent demand"),
             ("worklist", "list all open holes across the tree"),
@@ -330,7 +340,7 @@ class REPL:
                 suffix = f"  (cycle: open at {self._location_tag(closer)})"
             self.print_fn(
                 f"{marker} [{index}] {tag:<12} pos {pos}  ->  "
-                f"{{{headword}}}{suffix}"
+                f"{headword}{suffix}"
             )
 
     def cmd_events(self, rest: str) -> None:
@@ -429,7 +439,11 @@ class REPL:
         self._recall_active_with_entry(pos, entry)
 
     def cmd_inject(self, rest: str) -> None:
-        """Inject user text as a child demand at an active trace hole."""
+        """Supply a fuller call of the headword at an active trace hole.
+
+        A value is refused: it goes in through a definition (``expand``,
+        then the offer to replace the definition's text).
+        """
         if not self._require_trace():
             return
 
@@ -447,7 +461,7 @@ class REPL:
         self._inject_active_with_text(pos, text)
 
     def cmd_flatten(self, rest: str) -> None:
-        """Resolve active open holes as inert literal headwords."""
+        """Leave active open headwords unexpanded; they then read in braces."""
         if not self._require_trace():
             return
 
@@ -670,6 +684,13 @@ class REPL:
                 return
             self.print_fn("usage: set reduce <on_settle|off>")
             return
+        if name == "replace":
+            if policy in ("on_expand", "off"):
+                self.replace_policy = policy
+                self.print_fn(f"replace policy: {policy}.")
+                return
+            self.print_fn("usage: set replace <on_expand|off>")
+            return
         if name == "cleanup":
             if policy in (
                 "on_settled_only",
@@ -684,7 +705,37 @@ class REPL:
                 "<on_settled_only|on_every_resolution|off>"
             )
             return
-        self.print_fn("usage: set <reduce|cleanup> <policy>")
+        self.print_fn("usage: set <reduce|replace|cleanup> <policy>")
+
+    def cmd_brace(self, rest: str) -> None:
+        """Put back the braces round a filled position of the active node."""
+        self._set_braces(rest, shown=True)
+
+    def cmd_unbrace(self, rest: str) -> None:
+        """Take out the braces round a filled position of the active node."""
+        self._set_braces(rest, shown=False)
+
+    def _set_braces(self, rest: str, *, shown: bool) -> None:
+        if not self._require_trace():
+            return
+        try:
+            pos = int(rest.strip())
+        except ValueError:
+            self.print_fn(f"usage: {'brace' if shown else 'unbrace'} <pos>")
+            return
+
+        assert self.trace is not None
+        active = self.trace.active
+        change = "put back" if shown else "taken out"
+        try:
+            self.trace.set_braces_node(
+                active, pos, shown,
+                f"{self._location_tag(active)} pos {pos}: braces {change}",
+            )
+        except ValueError as exc:
+            self.print_fn(str(exc))
+            return
+        self.print_fn(f"braces {change}.")
 
     def cmd_tidy(self, rest: str) -> None:
         """Sweep settled prose, offering cleanup per target."""
@@ -896,38 +947,46 @@ class REPL:
 
     def _apply_reduction(self, node: Demand, text: str) -> bool:
         """Guard and store a reduction; report success."""
-        hits = self._headword_hits(text)
+        carried, hits = split_response(self.sim, node.instances(), text)
         if hits:
-            self.print_fn(
-                f"{hits} are headwords; reduction takes non-headword "
-                f"prose only. To use the word literally, escape it; "
-                f"to reference it, expand."
-            )
+            self.print_fn(self._reduction_rejection(hits))
             return False
 
         assert self.trace is not None
         self.trace.reduce_node(
             node, text,
             f"{self._location_tag(node)}: {text}",
+            instances=carried,
         )
         return True
+
+    def _reduction_rejection(self, hits: list[str]) -> str:
+        return (
+            f"{hits} are headwords; reduction takes non-headword "
+            f"prose only. To use the word literally, escape it; "
+            f"to reference it, expand. A headword left unexpanded in "
+            f"this text may be kept by writing it in braces."
+        )
 
     def _headword_hits(self, text: str) -> list[str]:
         """Headword tokens present in text, per tokeniser identity."""
         return sorted(set(self.sim.analyse(text).headwords))
 
-    def _offer_reduce_on_settle(self, node: Demand | None) -> None:
+    def _offer_reduce_on_settle(
+        self, node: Demand | None, *, skip: Demand | None = None,
+    ) -> None:
         """Offer reduce on each newly settled node, deepest-first.
 
         The offer lives in the input prompt; empty input or EOF skips.
         Existing output is unchanged unless an offer is accepted.
+        ``skip`` is a node whose text the person was just offered.
         """
         if self.reduce_policy != "on_settle":
             return
 
         chain: list[Demand] = []
         while node is not None and node.is_resolved:
-            if node.reduced is None:
+            if node.reduced is None and node is not skip:
                 chain.append(node)
             node = node.parent
 
@@ -1066,19 +1125,56 @@ class REPL:
     ) -> None:
         assert self.trace is not None
         active = self.trace.active
+        offered, replacement = self._offer_replacement(entry)
         self.trace.expand_node(
             self.sim, active, pos, entry.index,
             f"E{entry.index} at position {pos}",
+            replacement=replacement,
         )
         child = active.children()[pos]
+        if replacement is not None:
+            # The definition went in with its text replaced, so there is
+            # nothing to do inside it: the focus stays where it was.
+            self.print_fn(
+                f"expanded E{entry.index} at position {pos}; text replaced."
+            )
+            self._offer_reduce_on_settle(active)
+            self._announce_completion()
+            return
         self.trace.active = child
         self.print_fn(
             f"expanded E{entry.index} at position {pos}; now at child."
         )
-        self._offer_reduce_on_settle(child)
+        self._offer_reduce_on_settle(child, skip=child if offered else None)
         if self.cleanup_policy == "on_every_resolution":
             self._offer_cleanup_node(child)
         self._announce_completion()
+
+    def _offer_replacement(self, entry: RecalledEntry) -> tuple[bool, str | None]:
+        """Offer to replace a definition's text before it goes in.
+
+        Returns whether the offer was made, and the replacement if one was
+        given and can be taken. Headwords still in the definition's text
+        are then left unexpanded; the replacement may keep one by writing
+        it in braces, and may name no other headword.
+        """
+        if self.replace_policy != "on_expand":
+            return False, None
+        try:
+            text = self.input_fn(
+                f"replace E{entry.index} [{entry.text}] "
+                f"(replacement or empty to expand as it is): "
+            ).strip()
+        except EOFError:
+            text = ""
+        if not text:
+            return True, None
+        allowed = self.sim.analyse(entry.text).headwords
+        _, hits = split_response(self.sim, allowed, text)
+        if hits:
+            self.print_fn(self._reduction_rejection(hits))
+            return True, None
+        return True, text
 
     def _recall_active_with_entry(
         self,
@@ -1103,19 +1199,20 @@ class REPL:
             self.sim.analyse(text),
             provenance=InjectProvenance(text),
         )
-        self.trace.inject_node(
-            active, pos, child, text,
-            f"position {pos}: {text}",
-        )
+        try:
+            self.trace.inject_node(
+                active, pos, child, text,
+                f"position {pos}: {text}",
+            )
+        except HeadwordApplicationError:
+            raise
+        except ValueError as exc:
+            self.print_fn(str(exc))
+            return
+        # A supplied call is one headword still to be expanded, with no
+        # prose round it, so there is nothing to reduce or tidy yet.
         self.trace.active = child
         self.print_fn(f"injected at position {pos}; now at child.")
-        self._offer_reduce_on_settle(child)
-        if self.cleanup_policy == "on_every_resolution" or (
-            self.cleanup_policy == "on_settled_only"
-            and not child.open_positions
-        ):
-            self._offer_cleanup_node(child)
-        self._announce_completion()
 
     def _location_tag(self, demand: Demand) -> str:
         if demand.parent is None:

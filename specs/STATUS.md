@@ -38,6 +38,7 @@ This file tracks which specs are active, historical, or only exploratory.
 | `2026-11-12-structured-arguments.md` | Implemented prototype | List and tagged arguments, clause patterns on formals, choice of definition forced by form and recorded as such (schema 5); member-list demo. |
 | `2026-11-12-workbench-flatten-and-issue.md` | Implemented prototype | Bridge commands `flatten` and `issue`; issued results listed apart from candidates (schema 4); client notes for the website. |
 | `2026-11-11-record-every-step.md` | Implemented | Evidence for every trace-changing step (question, entry application, recall, unexpanded headword, reopening); the projection lists every step unpruned (schema 3). |
+| `2026-11-15-braces-and-replacement-at-expansion.md` | Implemented prototype | Bare headword still to expand, braces round one dealt with; braces removable by a recorded edit; a value replaces a definition's text at expansion; `inject` takes a fuller call only; responses may keep a headword left unexpanded (schema 6). |
 
 ## Next Likely Spec Segments
 

@@ -39,3 +39,6 @@ current code are the implementation contract.
   headword unexpanded and for issuing a result; what a website client must handle.
 - `2026-11-11-record-every-step.md` - every trace-changing step recorded with
   evidence and listed unpruned; production kept apart from organizing and testing.
+- `2026-11-15-braces-and-replacement-at-expansion.md` - braces round every
+  headword that has been dealt with; a value replaces a definition's text and
+  is never typed at a headword; what a website client must handle.

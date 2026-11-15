@@ -1,6 +1,6 @@
-"""Print an example prediction set: two supplied parameters and a reduction."""
+"""Print an example prediction set: two values and a reduction."""
 
-from demand import Demand, InjectProvenance, Trace
+from demand import Trace
 from engine import VDInstance
 from prediction_set import Classification, build_prediction_set
 from simulator import Simulator
@@ -9,21 +9,22 @@ from simulator import Simulator
 def main() -> None:
     dictionary = VDInstance("prediction example")
     dictionary.append_many([
-        ("mass", "supplied mass"),
-        ("acceleration", "supplied acceleration"),
+        ("mass", "what the balance reads"),
+        ("acceleration", "the second derivative of position"),
     ])
     sim = Simulator(dictionary)
     trace = Trace.start(sim, "mass times acceleration")
+    # Each value replaces the text of the definition its headword expands into.
     for pos, text in enumerate(("2 kg", "5 m/s^2")):
-        child = Demand(sim.analyse(text), provenance=InjectProvenance(text))
-        trace.inject_node(trace.root, pos, child, text, f"parameter at {pos}")
+        entry = sim.entry_indexes(trace.root.headword_at(pos))[0]
+        trace.expand_node(sim, trace.root, pos, entry, f"parameter at {pos}", replacement=text)
     trace.reduce_node(trace.root, "10 N", "evaluate the product")
 
     # These labels are supplied by this example's author, not inferred.
     annotations = {
-        "P1": Classification("parameter input", "Mass supplied for the example."),
-        "P2": Classification("parameter input", "Acceleration supplied for the example."),
-        "P3": Classification("correct maths", "Product and unit conversion to check."),
+        "P2": Classification("parameter input", "Mass supplied for the example."),
+        "P4": Classification("parameter input", "Acceleration supplied for the example."),
+        "P5": Classification("correct maths", "Product and unit conversion to check."),
     }
     print(build_prediction_set(trace, annotations).to_json())
 
