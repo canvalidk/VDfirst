@@ -77,7 +77,7 @@ Before this segment:
 
 ### Taking braces out
 
-6. `Trace.set_braces_node(node, pos, shown, detail)` hides or shows the braces of one filled position. It is recorded as a `clean` event, so the prediction set lists "what is meant by the text with the braces is the same as what is meant by the text without". A reduction that had consumed the text is reopened, as for any wording edit.
+6. `Trace.set_braces_node(node, pos, shown, detail)` hides or shows the braces of one filled position. It is recorded as a `clean` event, so the prediction set lists "what is meant by the text with the braces is the same as what is meant by the text without". It behaves as every wording edit does. If the frame is not reduced, its text shows in the frames above, so a reduction above that had consumed the text is reopened. If the frame is itself reduced, the frames above read only its reduction, so nothing is reopened, the frame's own reduction included: the edit lies beneath the reduction and shows when the reduction is reopened.
 7. A position still to be expanded, a supplied call, a pair already in the asked-for state and a position out of range are refused, and nothing is recorded.
 8. The engine does not read braces. A headword left unexpanded stays dealt with when its braces are out; the text then shows a bare headword that needs nothing.
 
@@ -132,7 +132,7 @@ REPL: `unbrace <pos>`, `brace <pos>`, `set replace <on_expand|off>`; `expand` ga
 `test_braces_and_replacement.py`:
 
 - the three states of a headword in the text; recalled text and reduced results keep their braces; the nested-definition case of §1; a supplied call has no braces;
-- braces taken out and put back as recorded edits, with their statements; the four refusals; a headword left unexpanded stays dealt with when its braces are out; taking braces out reopens a consuming reduction;
+- braces taken out and put back as recorded edits, with their statements; the four refusals; a headword left unexpanded stays dealt with when its braces are out; taking braces out reopens a consuming reduction above the frame, and beneath a frame's own reduction it reopens nothing;
 - a replacement at expansion as three recorded steps, with the definition's wording in the statement; no middle step without headwords; refused replacements record nothing;
 - a replacement and a later response may keep a headword in braces, and may not name it bare or name another; a reduction drops what it does not carry, and reopening restores it;
 - the REPL offer, asked once, refused, switched off; `unbrace` and `brace`;
@@ -147,7 +147,7 @@ Prototype choices, to be thought about later. None is settled.
 1. **Braces are drawn when the text is printed, not stored in it.** The engine knows the state of each position and prints accordingly. So a pair can be taken out per position; the braces cannot be edited as loose characters.
 2. **Recalled text gets one pair of braces, and the headwords spelled inside it stay bare.** They are plain text there, not demands, so they read as "still to be expanded" although nothing can expand them. This is the one place the printed text breaks the convention.
 3. **A supplied call has no braces**, because it is still to be expanded.
-4. **Taking braces out is a wording edit.** It is listed as a meaning preservation and reopens reductions that consumed the text.
+4. **Taking braces out is a wording edit.** It is listed as a meaning preservation and, like the other wording edits, reopens the reductions above an unreduced frame that consumed the text. Beneath a frame's own reduction it reopens nothing.
 5. **A replacement at expansion is three existing steps, not a new kind of step.** The record and the bridge are unchanged in shape.
 6. **"Fuller call" is checked by headword and number of arguments only.** `mass_cart` supplied for `mass` is taken; so is `contribution_A_1` for `contribution_A_m`. The engine does not check that the supplied call agrees with the arguments the demand already had.
 7. **The starting step no longer marks the headwords it found in its text.** It used to record `find force` read as `find {force}`. Both now read `find force`; the headwords found are in `evidence.before.headwords`.

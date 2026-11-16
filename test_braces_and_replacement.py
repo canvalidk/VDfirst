@@ -204,6 +204,21 @@ def test_taking_braces_out_reopens_what_was_worked_out_from_the_text(sim):
     assert trace.root.text() == "{2 kg times {5 m/s^2}}"
 
 
+def test_taking_braces_out_beneath_a_reduction_reopens_nothing(sim):
+    trace = Trace.start(sim, "force")
+    trace.expand_node(sim, trace.root, 0, 2, "the force entry")
+    calculation = trace.root.children()[0]
+    trace.recall_node(sim, calculation, 0, 0, "recall mass")
+    trace.recall_node(sim, calculation, 1, 1, "recall acceleration")
+    trace.reduce_node(calculation, "10 N", "worked out")
+    trace.reduce_node(trace.root, "a report", "consumer of the reduction")
+    trace.set_braces_node(calculation, 0, False, "out")
+    assert calculation.reduced == "10 N"
+    assert trace.root.reduced == "a report"
+    calculation.clear_reduction()
+    assert trace.root.text() == "{2 kg times {5 m/s^2}}"
+
+
 # ── A value replaces the text of a definition ───────────────────────
 
 
