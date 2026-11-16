@@ -6,7 +6,7 @@ import argparse
 from dataclasses import asdict, dataclass
 import json
 
-from demand import Demand, InjectProvenance, Trace
+from demand import Trace
 from engine import VDInstance
 from prediction_set import Classification, PredictionSet, build_prediction_set
 from repl import REPL
@@ -41,9 +41,16 @@ def build_correction_demo() -> tuple[DemoStage, ...]:
     index = sim.entry_indexes(call)[0]
     trace.expand_node(sim, trace.root, 0, index, f"E{index} for {call}")
     calculation = trace.root.children()[0]
+    # A value never answers a bare headword. Each one replaces the text of
+    # the definition that the headword is expanded into. Those two texts
+    # name their own headword ("supplied mass of p"), which the engine reads
+    # as a demand, so each replacement first records it as left unexpanded.
     for pos, text in enumerate(("2 kg", "5 m/s^2")):
-        child = Demand(sim.analyse(text), provenance=InjectProvenance(text))
-        trace.inject_node(calculation, pos, child, text, f"input for {call} at {pos}")
+        demanded = calculation.headword_at(pos)
+        entry = sim.entry_indexes(demanded)[0]
+        trace.expand_node(
+            sim, calculation, pos, entry, f"E{entry} for {demanded}", replacement=text,
+        )
 
     stages = []
 
@@ -52,9 +59,12 @@ def build_correction_demo() -> tuple[DemoStage, ...]:
             return "question"
         if claim.kind == "entry_application":
             return "entry applied"
-        if claim.kind == "supplied_input":
+        if claim.kind == "left_unexpanded":
+            return "left unexpanded"
+        depth = len(claim.evidence.before.address)
+        if depth == 2:
             return "parameter input"
-        return "calculation" if claim.evidence.before.address else "report wording"
+        return "calculation" if depth else "report wording"
 
     def capture(title: str, description: str) -> None:
         candidates = build_prediction_set(trace)
@@ -63,7 +73,10 @@ def build_correction_demo() -> tuple[DemoStage, ...]:
         }
         stages.append(DemoStage(title, description, build_prediction_set(trace, categories)))
 
-    capture("Inputs supplied", "The call supplies cart and time 0 to both demands.")
+    capture(
+        "Inputs supplied",
+        "The call supplies cart and time 0 to both demands; each value replaces a definition's text.",
+    )
     trace.reduce_node(calculation, "12 N", "scripted arithmetic mistake")
     capture("Mistake recorded", "The scripted interpreter supplies 12 N for the product.")
     trace.reduce_node(trace.root, "Prediction: 12 N", "report the mistaken result")

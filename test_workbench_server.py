@@ -81,7 +81,7 @@ def test_http_start_continue_and_validate_preserve_a_replayable_record():
     })
     assert status == 200
     recalled = value['record']
-    assert recalled['snapshots'][-1]['prediction_set']['result'] == '5+6'
+    assert recalled['snapshots'][-1]['prediction_set']['result'] == '{5+6}'
     status, value = exchange('POST', '/api/workbench/command', {
         'record': recalled,
         'command': {'operation': 'reduce', 'frame_id': 'F', 'response': '12'},
@@ -91,7 +91,7 @@ def test_http_start_continue_and_validate_preserve_a_replayable_record():
     assert continued['record_id'] == record['record_id']
     assert continued['snapshots'][:-1] == recalled['snapshots']
     claims = continued['snapshots'][-1]['prediction_set']['predictions']
-    assert claims[-1]['evidence']['stimulus'] == '5+6'
+    assert claims[-1]['evidence']['stimulus'] == '{5+6}'
     assert claims[-1]['evidence']['response'] == '12'
     assert claims[-1]['verification'] == 'unchecked'
     status, value = exchange('POST', '/api/workbench/validate', {'record': continued})

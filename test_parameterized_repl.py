@@ -54,6 +54,9 @@ def drive_repl(
             " ".join(str(arg) for arg in args)
         ),
     )
+    # These scripts predate the offer to replace a definition's text at
+    # expansion; that offer has its own tests in test_braces_and_replacement.py.
+    repl.replace_policy = "off"
     repl.run()
     return repl, output
 
@@ -105,7 +108,7 @@ class TestParameterizedExpansion:
         assert output == [
             "trace started.",
             "at: root",
-            "{inertial-acceleration_3}",
+            "inertial-acceleration_3",
             "open positions: 0",
             "expanded E1 at position 0; now at child.",
         ]
@@ -170,9 +173,9 @@ class TestParameterizedRecall:
         assert output[-3:] == [
             "recalled E1 at position 0.",
             "trace complete.",
-            "derivative of velocity_T at time T",
+            "{derivative of velocity_T at time T}",
         ]
         assert repl.trace is not None
         assert repl.trace.root.text() == (
-            "derivative of velocity_T at time T"
+            "{derivative of velocity_T at time T}"
         )

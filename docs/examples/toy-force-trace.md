@@ -17,7 +17,7 @@ E2 force        -> mass times acceleration
 trace force
 
 at: root
-{force}
+force
 open positions: 0
 ```
 
@@ -25,7 +25,7 @@ open positions: 0
 expand
 
 at: E2 @ parent pos 0
-{mass} times {acceleration}
+mass times acceleration
 open positions: 0, 1
 ```
 
@@ -33,9 +33,12 @@ open positions: 0, 1
 recall 0
 
 at: E2 @ parent pos 0
-2 kg times {acceleration}
+{2 kg} times acceleration
 open positions: 1
 ```
+
+A bare headword is still to be expanded. Braces stand round one that has been
+dealt with (`specs/2026-11-15-braces-and-replacement-at-expansion.md`).
 
 ## Why This Example Matters
 
@@ -53,6 +56,6 @@ Once return semantics exist, this example should show the evaluator working
 back up to the root and producing:
 
 ```text
-2 kg times 5 m/s^2
+{{2 kg} times {5 m/s^2}}
 ```
 

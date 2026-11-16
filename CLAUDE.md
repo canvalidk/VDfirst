@@ -45,7 +45,8 @@ as the implementation/test surface.
 - The REPL exposes `help`, `headwords`, `count`, `recall`, `trace`,
   `expand`, `inject`, `flatten`, `return`, `onward`, `events`,
   `worklist`, `goto` / `go to`, `state`, `up`, `cancel`, `reduce`,
-  `unreduce`, `fold`, `tidy`, and `set` (reduce/cleanup policies).
+  `unreduce`, `fold`, `tidy`, `brace`, `unbrace`, and `set`
+  (reduce/replace/cleanup policies).
   `back` was removed per ADR 5 (no severing).
 - `run_repl.py` is the Newton simulator entry point.
 - Cycle information is implemented: `Demand.ancestor_cycle`, worklist
@@ -106,7 +107,20 @@ as the implementation/test surface.
   requires; when one entry is left the choice is forced, and the entry step
   records every clause and which fit (schema 5). Prototype: see
   `specs/2026-11-12-structured-arguments.md` and `member_list_demo.py`.
-- Expected test result: 590 passing tests.
+- The text of a trace marks what has been dealt with. A bare headword is still
+  to be expanded; `{definition text}` is an expanded one; `{headword}` is one
+  left unexpanded (`flatten`). The braces are plain text that nothing reads,
+  and `Trace.set_braces_node` (`unbrace` / `brace`) takes a pair out or puts it
+  back as a recorded edit. A value never answers a bare headword:
+  `Trace.expand_node(..., replacement=...)` applies an entry, leaves the
+  headwords still in its text unexpanded, and replaces the text, as three
+  recorded steps. `Trace.inject_node` takes only a fuller call of the demanded
+  headword. A response may keep a headword left unexpanded by writing it in
+  braces (`split_response`, `Demand.instances`). Prediction-set schema 6 adds
+  no field; the quoted text follows this convention. Prototype: see
+  `specs/2026-11-15-braces-and-replacement-at-expansion.md`, whose section 10
+  lists what it leaves open.
+- Expected test result: 633 passing tests.
 - Next likely work: Design 2.1 interaction integration, richer trace
   presentation such as `tree` or `show <headword>`, and any automated
   compression-on-resolve UX if it is still wanted.

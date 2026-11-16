@@ -52,6 +52,9 @@ def drive(sim: Simulator, inputs: list[str]) -> list[str]:
         input_fn=input_fn,
         print_fn=lambda *args: out.append(" ".join(str(a) for a in args)),
     )
+    # These scripts predate the offer to replace a definition's text at
+    # expansion; that offer has its own tests in test_braces_and_replacement.py.
+    repl.replace_policy = "off"
     repl.run()
     return out
 
@@ -75,18 +78,23 @@ EXPECTED_HELP = [
         "cleanup offers: on_settled_only|on_every_resolution|off",
     ),
     help_line("set reduce <on_settle|off>", "toggle reduce offers on settle"),
+    help_line(
+        "set replace <on_expand|off>",
+        "toggle the offer to replace a definition's text",
+    ),
     help_line("trace <text>", "start a new trace"),
     "",
     "trace-only:",
+    help_line("brace <pos>", "put back the braces round a filled position"),
     help_line("cancel", "abandon the entire trace"),
     help_line("classify <id> <category>", "label a prediction; does not verify it"),
     help_line("down <pos>", "inspect a child, including settled calculations"),
     help_line("events", "show trace event history"),
     help_line("expand [pos]", "expand an open hole into a dictionary entry"),
-    help_line("flatten [pos|all]", "make active open holes inert literals"),
+    help_line("flatten [pos|all]", "leave open headwords unexpanded, in braces"),
     help_line("fold", "offer reduce across settled nodes, leaves-up"),
     help_line("go to N, goto N", "move active focus to worklist entry N"),
-    help_line("inject [pos]", "fill an open hole with user-supplied text"),
+    help_line("inject [pos]", "supply a fuller call of an open headword"),
     help_line("onward", "leave settled frames for the deepest open ancestor"),
     help_line("predictions [json]", "show trace-derived claims or export JSON"),
     help_line("reduce", "replace the active node's render with equivalent text"),
@@ -96,6 +104,7 @@ EXPECTED_HELP = [
         "tidy [scope]",
         "sweep settled prose for cleanup (active|subtree|all)",
     ),
+    help_line("unbrace <pos>", "take out the braces round a filled position"),
     help_line("unreduce", "clear the active node's reduction"),
     help_line("up", "move active focus to the parent demand"),
     help_line("worklist", "list all open holes across the tree"),

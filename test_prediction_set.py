@@ -30,6 +30,9 @@ def run(sim, commands):
             raise EOFError
 
     repl = REPL(sim, input_fn=read, print_fn=output.append)
+    # These scripts predate the offer to replace a definition's text at
+    # expansion; that offer has its own tests in test_braces_and_replacement.py.
+    repl.replace_policy = "off"
     repl.run()
     return repl, output
 
@@ -65,12 +68,12 @@ def test_snapshot_retains_local_arguments_and_provenance(sim):
     ).evidence
     child.clean_recall_text(0, "3 kg")
     child.set_latents(["now ", " times 7"])
-    assert evidence.stimulus == "2 kg times 5"
+    assert evidence.stimulus == "{2 kg} times 5"
     assert evidence.before.address == (0,)
     assert evidence.before.latents == ("", " times 5")
     assert evidence.before.headwords == ("mass",)
     assert evidence.before.source_index == 1
-    assert evidence.before.arguments[0].text == "2 kg"
+    assert evidence.before.arguments[0].text == "{2 kg}"
     assert evidence.before.arguments[0].source_index == 0
     with pytest.raises(FrozenInstanceError):
         evidence.response = "different"
@@ -79,30 +82,42 @@ def test_snapshot_retains_local_arguments_and_provenance(sim):
 def test_identical_children_have_distinct_addresses_and_ids(sim):
     trace = Trace.start(sim, "mass and mass")
     for pos in (0, 1):
-        child = Demand(sim.analyse("5+6"), provenance=InjectProvenance("5+6"))
-        trace.inject_node(trace.root, pos, child, "5+6", "input")
-        trace.reduce_node(child, "11", "same answer")
+        trace.expand_node(sim, trace.root, pos, 0, "the mass entry", replacement="two kilograms")
     claims = build_prediction_set(trace).predictions
     assert [p.id for p in claims] == ["P0", "P1", "P2", "P3", "P4"]
     assert [p.evidence.before.address for p in claims if p.operation == "reduce"] == [
         (0,), (1,),
     ]
-    assert [p.evidence.position for p in claims if p.operation == "inject"] == [0, 1]
+    assert [p.evidence.position for p in claims if p.operation == "expand"] == [0, 1]
+    assert trace.root.text() == "{two kilograms} and {two kilograms}"
 
 
-def test_injection_keeps_raw_response_before_analysis_or_reduction(sim):
+def test_a_supplied_call_keeps_its_evidence_as_first_recorded():
+    instance = VDInstance("supplied call")
+    instance.append_many([("mass_p", "what the scale reads for p"), ("force_p", "mass_p times 5")])
+    sim = Simulator(instance)
     trace = Trace.start(sim, "force")
-    child = Demand(sim.analyse("mass times 5"), provenance=InjectProvenance("mass times 5"))
-    trace.inject_node(trace.root, 0, child, "mass times 5", "input")
+    child = Demand(sim.analyse("force_cart"), provenance=InjectProvenance("force_cart"))
+    trace.inject_node(trace.root, 0, child, "force_cart", "which body")
     claim = build_prediction_set(trace).predictions[-1]
     assert claim.id == "P1"
-    child.resolve_recall(0, "2 kg", 0)
-    trace.reduce_node(child, "10 N", "answer")
+    trace.expand_node(sim, child, 0, 1, "the force entry")
     assert claim.kind == "supplied_input"
     assert claim.evidence.stimulus == "force"
-    assert claim.evidence.response == "mass times 5"
-    assert claim.evidence.after.render == "{mass} times 5"
+    assert claim.evidence.response == "force_cart"
+    assert claim.evidence.after.render == "force_cart"      # frozen before the expansion
+    assert trace.root.text() == "{mass_cart times 5}"       # the supplied call itself has no braces
     assert claim.classification.category == "unclassified"
+
+
+@pytest.mark.parametrize("text", ["2 kg", "5+6", "mass times 5", "force", "mass"])
+def test_a_value_or_prose_cannot_be_supplied_at_a_headword(sim, text):
+    trace = Trace.start(sim, "force")
+    child = Demand(sim.analyse(text), provenance=InjectProvenance(text))
+    with pytest.raises(ValueError, match="not a fuller call of 'force'"):
+        trace.inject_node(trace.root, 0, child, text, "refused")
+    assert len(trace.events) == 1
+    assert trace.root.open_positions == [0]
 
 
 def test_cleanup_records_changed_prose_even_under_reduction(sim):
@@ -111,8 +126,8 @@ def test_cleanup_records_changed_prose_even_under_reduction(sim):
     trace.reduce_node(trace.root, "an answer", "reduce")
     trace.clean_node(trace.root, ["a value of ", ""], "clean")
     claim = build_prediction_set(trace).predictions[-1]
-    assert claim.evidence.stimulus == "the 2 kg"
-    assert claim.evidence.response == "a value of 2 kg"
+    assert claim.evidence.stimulus == "the {2 kg}"
+    assert claim.evidence.response == "a value of {2 kg}"
     assert claim.evidence.before.render == claim.evidence.after.render == "an answer"
     assert claim.kind == "meaning_preservation"
 
@@ -126,7 +141,7 @@ def test_cleanup_of_compressed_recall_records_actual_text(sim):
     assert claim.evidence.stimulus == "2 kg"
     assert claim.evidence.response == "two kilograms"
     assert claim.evidence.position == 0
-    assert trace.root.text() == "mass"
+    assert trace.root.text() == "{mass}"
 
 
 def test_labels_never_verify_claims_and_projection_does_not_mutate(sim):
@@ -165,7 +180,7 @@ def test_incomplete_and_legacy_traces_do_not_invent_claims(sim):
     assert result.unrecorded_events == (1, 2, 3, 5, 6, 7)
     assert not result.dependency_selection_complete
     assert not result.trace_complete
-    assert result.result == "{force}"
+    assert result.result == "force"
 
 
 def test_a_trace_assembled_without_start_has_no_recorded_question(sim):
@@ -219,9 +234,9 @@ def test_every_step_kind_is_listed_once_in_recorded_order():
     assert (left.stimulus, left.position) == ("gravity", 1)
     assert left.after.arguments[1].resolution == "LiteralResolution"
     assert by_id["P3"].statement == (
-        "The headword 'gravity' is left as plain text here; no entry is applied to it."
+        "The headword 'gravity' is left unexpanded here; no entry is applied to it."
     )
-    assert by_id["P4"].evidence.stimulus == "2 kg times gravity near ground"
+    assert by_id["P4"].evidence.stimulus == "{2 kg} times {gravity} near ground"
     assert by_id["P4"].evidence.dependencies == (2, 3)
 
 
@@ -233,7 +248,7 @@ def test_flattening_several_headwords_is_one_recorded_step(sim):
     assert claim.evidence.stimulus == claim.evidence.response == "mass, force"
     assert claim.evidence.position is None
     assert claim.statement == (
-        "The headwords 'mass', 'force' are left as plain text here; no entry is applied to them."
+        "The headwords 'mass', 'force' are left unexpanded here; no entry is applied to them."
     )
 
 
@@ -275,26 +290,29 @@ def test_invalid_annotation_and_detached_node_are_rejected(sim):
 
 
 def test_repl_prediction_flow_and_json_export(sim):
+    # The value goes in at the offer the expansion makes: "two kilograms"
+    # replaces the text of the mass entry.
     repl, output = run(sim, [
-        "set cleanup off", "set reduce off", "trace mass",
-        "inject", "5+6", "reduce", "11",
-        "classify P1 parameter input", "classify P2 correct maths",
+        "set cleanup off", "set reduce off", "set replace on_expand", "trace mass",
+        "expand", "two kilograms",
+        "classify P1 entry applied", "classify P2 parameter input",
         "predictions", "predictions json",
     ])
     result = json.loads(output[-1])
-    assert result["result"] == "11"
-    assert [(p["id"], p["classification"]["category"]) for p in result["predictions"]] == [
-        ("P0", "unclassified"), ("P1", "parameter input"), ("P2", "correct maths"),
+    assert result["result"] == "{two kilograms}"
+    assert [(p["id"], p["kind"], p["classification"]["category"]) for p in result["predictions"]] == [
+        ("P0", "normalization", "unclassified"),
+        ("P1", "entry_application", "entry applied"),
+        ("P2", "meaning_preservation", "parameter input"),
     ]
     assert all(p["verification"] == "unchecked" for p in result["predictions"])
-    assert any("P2 [correct maths]" in line for line in output)
-    assert repl.trace.root.text() == "11"
+    assert any("P2 [parameter input]" in line for line in output)
+    assert repl.trace.root.text() == "{two kilograms}"
 
 
 @pytest.mark.parametrize("commands", [
     ["set reduce off", "trace 5+6", "reduce", "11"],
     ["set reduce off", "trace 5+6", "fold", "11"],
-    ["trace mass", "inject", "5+6", "11", ""],
 ])
 def test_all_reduction_paths_record_sources(sim, commands):
     repl, _ = run(sim, ["set cleanup off"] + commands)
@@ -306,10 +324,19 @@ def test_all_reduction_paths_record_sources(sim, commands):
     assert reductions[0].evidence.response == "11"
 
 
+def test_a_replacement_at_expansion_records_the_definition_text_as_its_source(sim):
+    repl, _ = run(sim, ["set cleanup off", "set replace on_expand", "trace mass", "expand", "two kilograms"])
+    reductions = [
+        p for p in build_prediction_set(repl.trace).predictions if p.operation == "reduce"
+    ]
+    assert len(reductions) == 1
+    assert reductions[0].evidence.stimulus == "2 kg"
+    assert reductions[0].evidence.response == "two kilograms"
+
+
 @pytest.mark.parametrize("commands, expected", [
     (["set cleanup off", "trace prose", "tidy active", "new prose"], ("prose", "new prose")),
     (["trace mass", "recall", "two kilograms"], ("2 kg", "two kilograms")),
-    (["trace mass", "inject", "prose", "new prose"], ("prose", "new prose")),
     (
         ["set cleanup off", "trace mass", "recall", "tidy active", "", "", "two kilograms"],
         ("2 kg", "two kilograms"),
@@ -334,7 +361,7 @@ def test_repl_expand_recall_and_flatten_reach_the_list(sim):
         ("flatten", "left_unexpanded"),
         ("recall", "entry_recall"),
     ]
-    assert result.result == "mass times 5 and 2 kg"
+    assert result.result == "{{mass} times 5} and {2 kg}"
     assert result.unrecorded_events == ()
     assert result.dependency_selection_complete
     assert set(result.current_prediction_ids) == {p.id for p in result.predictions}
@@ -385,9 +412,9 @@ def test_an_issued_result_inherits_gaps_in_what_it_rested_on(sim):
     trace = Trace.start(sim, "mass")
     trace.root.resolve_recall(0, "2 kg", 0)  # filled without a recorded step
     event = trace.issue("answer")
-    assert (event.change.stimulus, event.change.response) == ("mass", "2 kg")
+    assert (event.change.stimulus, event.change.response) == ("mass", "{2 kg}")
     issued = build_prediction_set(trace).issued[0]
-    assert (issued.id, issued.result, issued.prediction_ids) == ("I1", "2 kg", ("P0",))
+    assert (issued.id, issued.result, issued.prediction_ids) == ("I1", "{2 kg}", ("P0",))
     assert not issued.dependency_selection_complete
 
 

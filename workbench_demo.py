@@ -15,8 +15,15 @@ def build_record():
     )
     commands = [
         {'operation': 'expand', 'frame_id': 'F', 'position': 0, 'entry_index': 0},
-        {'operation': 'inject', 'frame_id': 'F/0', 'position': 0, 'response': '2 kg'},
-        {'operation': 'inject', 'frame_id': 'F/0', 'position': 1, 'response': '5 m/s^2'},
+        # A value replaces the text of the definition its headword expands
+        # into. Each of these two texts names its own headword, which is left
+        # unexpanded before the text is replaced.
+        {'operation': 'expand', 'frame_id': 'F/0', 'position': 0, 'entry_index': 1},
+        {'operation': 'flatten', 'frame_id': 'F/0/0', 'position': 0},
+        {'operation': 'reduce', 'frame_id': 'F/0/0', 'response': '2 kg'},
+        {'operation': 'expand', 'frame_id': 'F/0', 'position': 1, 'entry_index': 2},
+        {'operation': 'flatten', 'frame_id': 'F/0/1', 'position': 0},
+        {'operation': 'reduce', 'frame_id': 'F/0/1', 'response': '5 m/s^2'},
         {'operation': 'reduce', 'frame_id': 'F/0', 'response': '12 N', 'note': 'scripted arithmetic mistake'},
         {'operation': 'reduce', 'frame_id': 'F', 'response': 'Prediction: 12 N'},
         {'operation': 'reopen', 'frame_id': 'F/0', 'note': 'reopen the original product'},

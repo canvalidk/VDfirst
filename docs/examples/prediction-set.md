@@ -9,18 +9,26 @@ trace or the dictionary.
 
 ## Try it
 
-From the repository root, run `python prediction_demo.py`. The example supplies
-`2 kg` for `mass`, supplies `5 m/s^2` for `acceleration`, and replaces
-`2 kg times 5 m/s^2` with `10 N`.
+From the repository root, run `python prediction_demo.py`. The example expands
+`mass` and `acceleration` into their definitions, replaces each definition's
+text with a value (`2 kg`, `5 m/s^2`), and replaces `{2 kg} times {5 m/s^2}`
+with `10 N`. A value is never given for a bare headword: it answers the wording
+of one entry.
 
 The export contains:
 
 | ID | Kind | Author-supplied category | Recorded pair |
 |---|---|---|---|
-| P0 | normalization | (unclassified) | mass times acceleration → {mass} times {acceleration} |
-| P1 | supplied_input | parameter input | mass → 2 kg |
-| P2 | supplied_input | parameter input | acceleration → 5 m/s^2 |
-| P3 | meaning_preservation | correct maths | 2 kg times 5 m/s^2 → 10 N |
+| P0 | normalization | (unclassified) | mass times acceleration → mass times acceleration |
+| P1 | entry_application | (unclassified) | mass → what the balance reads |
+| P2 | meaning_preservation | parameter input | what the balance reads → 2 kg |
+| P3 | entry_application | (unclassified) | acceleration → the second derivative of position |
+| P4 | meaning_preservation | parameter input | the second derivative of position → 5 m/s^2 |
+| P5 | meaning_preservation | correct maths | {2 kg} times {5 m/s^2} → 10 N |
+
+In these texts a bare headword is still to be expanded, and braces stand round
+one that has been dealt with. See
+`specs/2026-11-15-braces-and-replacement-at-expansion.md`.
 
 Every claim is **unchecked**. “Correct maths” names what the claim concerns;
 it does not assert that the computation has passed a check. The same machinery
@@ -37,8 +45,8 @@ After a trace has some responses, use:
 
 ```text
 predictions
-classify P2 correct maths
-classify P1 parameter input
+classify P5 correct maths
+classify P2 parameter input
 predictions json
 ```
 
@@ -54,8 +62,11 @@ redirected to a file as shown in the root README.
 
 ## Programmatic use
 
-Use `Trace.reduce_node`, `Trace.unreduce_node`, `Trace.inject_node`,
-`Trace.clean_node`, and `Trace.clean_recall` to mutate and record together.
+Use `Trace.expand_node`, `Trace.recall_node`, `Trace.flatten_node`,
+`Trace.reduce_node`, `Trace.unreduce_node`, `Trace.inject_node`,
+`Trace.clean_node`, `Trace.clean_recall` and `Trace.set_braces_node` to mutate
+and record together. `Trace.inject_node` takes only a fuller call of the
+demanded headword; a value goes in with `Trace.expand_node(..., replacement=...)`.
 The existing low-level `Demand` methods still work, but bypass evidence recording.
 
 ```python
@@ -63,7 +74,7 @@ from prediction_set import Classification, build_prediction_set
 
 result = build_prediction_set(trace)
 labelled = build_prediction_set(
-    trace, {"P2": Classification("correct maths", "Check the units too.")}
+    trace, {"P5": Classification("correct maths", "Check the units too.")}
 )
 json_text = labelled.to_json()
 ```
@@ -83,8 +94,10 @@ every entry index that defines the call. The list is unsorted and unpruned:
 organizing it and testing its members are separate layers. Cleanup
 gets its own meaning-preservation claim, including when an overlay hides the
 edited prose. The equality criterion remains a matter of interpretation.
-Supplied inputs provisionally get an appropriateness obligation; that wording
-does not settle whether injection ultimately belongs in the same equality family.
+Since schema 6 a supplied input is always a fuller call of the demanded
+headword and keeps its appropriateness wording. A value is a replacement of a
+definition's text, so it is listed as a meaning preservation, in the same
+equality family as arithmetic; what tells the two apart is not recorded.
 
 The set includes recorded history, including replaced or cleared reductions.
 Schema version 2 added `current_prediction_ids`, `historical_prediction_ids`,
@@ -92,7 +105,8 @@ and `dependency_selection_complete`; version 3 lists every recorded step;
 version 4 adds `issued`, the results declared as answers, each with the
 candidates it rested on when issued; version 5 adds `evidence.entry.clauses`,
 every entry of the stem, so a definition ruled out by the form of the demand
-can be told apart from one a person passed over.
+can be told apart from one a person passed over; version 6 adds no field and
+marks the change of text convention (braces round a headword dealt with).
 These fields select recorded step lineage
 for the current result; they do not decide semantic necessity or correctness.
 A replacement made directly on an existing overlay consumes its earlier

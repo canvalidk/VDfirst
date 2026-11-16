@@ -9,6 +9,13 @@ It does not decide equivalence, observational fidelity, or theory failure.
 Prototype: which steps are listed, how a choice among definitions is recorded
 and the wording of the statements are provisional. See §9 of
 specs/2026-11-11-record-every-step.md before relying on them.
+
+Since schema 6 the text quoted in evidence follows the brace convention of
+specs/2026-11-15-braces-and-replacement-at-expansion.md: a bare headword is
+still to be expanded, and braces stand round one that has been dealt with,
+by expanding it or by leaving it unexpanded. A supplied input is now always
+a fuller call of the demanded headword; a value enters as a replacement of
+a definition's text and is listed as a meaning preservation.
 """
 
 from __future__ import annotations
@@ -37,8 +44,8 @@ KIND_DESCRIPTIONS = {
     "normalization": "the starting demand states what is asked",
     "entry_application": "a dictionary entry was applied to a demand, which continues as a child demand",
     "entry_recall": "a dictionary entry's text was inserted for a demand as it stands",
-    "left_unexpanded": "a headword was left as plain text, with no entry applied",
-    "supplied_input": "a response was supplied for a demand from outside the dictionary",
+    "left_unexpanded": "a headword was left unexpanded, in braces, with no entry applied",
+    "supplied_input": "a fuller call of the demanded headword was supplied from outside the dictionary",
     "meaning_preservation": "one wording was replaced by another said to mean the same",
 }
 
@@ -101,7 +108,7 @@ class PredictionSet:
     trace_complete: bool
     predictions: tuple[Prediction, ...]
     unrecorded_events: tuple[int, ...]
-    schema_version: int = 5
+    schema_version: int = 6
     scope: str = "recorded trace history"
     coverage_complete: bool = False
     limitations: tuple[str, ...] = (
@@ -159,8 +166,8 @@ def _statement(kind: str, change: TraceChange) -> str:
         left = [repr(argument.headword) for argument in change.after.arguments
                 if argument.position not in already]
         if len(left) == 1:
-            return f"The headword {left[0]} is left as plain text here; no entry is applied to it."
-        return (f"The headwords {', '.join(left)} are left as plain text here; "
+            return f"The headword {left[0]} is left unexpanded here; no entry is applied to it."
+        return (f"The headwords {', '.join(left)} are left unexpanded here; "
                 "no entry is applied to them.")
     if kind == "supplied_input":
         return (

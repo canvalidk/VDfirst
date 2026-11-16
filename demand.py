@@ -3,6 +3,17 @@
 The engine produces immutable Definiens objects: literal text with
 headword holes. A Demand records how a human resolves those original
 holes while leaving the Definiens itself untouched.
+
+How a headword reads in the text of a trace (prototype, 15 November 2026;
+see specs/2026-11-15-braces-and-replacement-at-expansion.md):
+
+    net-force                  still to be expanded
+    {mass times acceleration}  expanded: one pair of braces round the
+                               definition's text
+    {mass}                     left unexpanded on purpose
+
+The braces are plain text. Nothing reads them, and a person may take a
+pair out with a recorded edit.
 """
 
 from __future__ import annotations
@@ -10,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Union
 
+from application import HeadwordApplicationError, HeadwordCall
 from definiens import Definiens
 from residual import Residual
 
@@ -195,6 +207,8 @@ class Demand:
     reduced: Optional[str] = None
     cleaned: bool = False
     cleaned_recalls: set[int] = field(default_factory=set)
+    unbraced: set[int] = field(default_factory=set)
+    reduced_instances: tuple[str, ...] = ()
     _prose_support: _ClaimSupport = field(
         default_factory=_ClaimSupport, init=False, repr=False,
     )
@@ -235,6 +249,7 @@ class Demand:
         node = self
         while node is not None:
             node.reduced = None
+            node.reduced_instances = ()
             node._reduction_support = _ClaimSupport()
             node = node.parent
 
@@ -332,6 +347,7 @@ class Demand:
 
         resolution = self.resolutions.pop(pos)
         self._resolution_support.pop(pos, None)
+        self.unbraced.discard(pos)
         if isinstance(resolution, (ExpandResolution, InjectResolution)):
             resolution.child.parent = None
 
@@ -373,14 +389,19 @@ class Demand:
         else:
             raise RuntimeError(f"unknown resolution type: {resolution!r}")
 
-    def set_reduction(self, text: str) -> None:
-        """Overlay a human-supplied equivalent for this node's render."""
+    def set_reduction(self, text: str, instances: tuple[str, ...] = ()) -> None:
+        """Overlay a human-supplied equivalent for this node's render.
+
+        ``instances`` are the headwords left unexpanded that the new text
+        still names in braces (see ``split_response``).
+        """
 
         if not self.is_resolved:
             raise ValueError(
                 "cannot reduce: demand subtree is not fully resolved"
             )
         self.reduced = text
+        self.reduced_instances = tuple(instances)
         self._reduction_support = _ClaimSupport(complete=False)
         self._invalidate_consumers()
 
@@ -389,6 +410,7 @@ class Demand:
 
         had_reduction = self.reduced is not None
         self.reduced = None
+        self.reduced_instances = ()
         self._reduction_support = _ClaimSupport()
         if had_reduction:
             self._invalidate_consumers()
@@ -428,6 +450,52 @@ class Demand:
         self._resolution_support[pos] = _ClaimSupport(complete=False)
         if self.reduced is None:
             self._invalidate_consumers()
+
+    def set_braces(self, pos: int, shown: bool) -> None:
+        """Show or hide the braces round a filled position.
+
+        The braces are text only, so this changes how the position reads
+        and nothing else. A headword still to be expanded has no braces,
+        and neither has a supplied call, which is itself still to be
+        expanded.
+        """
+
+        self._check_position(pos)
+        if pos not in self.resolutions:
+            raise ValueError(
+                f"position {pos} is still to be expanded; it has no braces"
+            )
+        if isinstance(self.resolutions[pos], InjectResolution):
+            raise ValueError(f"position {pos} is a supplied call; it has no braces")
+        if shown == (pos not in self.unbraced):
+            raise ValueError(
+                f"position {pos} already has {'its' if shown else 'no'} braces"
+            )
+        if shown:
+            self.unbraced.discard(pos)
+        else:
+            self.unbraced.add(pos)
+        if self.reduced is None:
+            self._invalidate_consumers()
+
+    def instances(self) -> tuple[str, ...]:
+        """Headwords left unexpanded that this demand's text shows in braces.
+
+        A reduced demand shows the ones its replacement text carried over.
+        """
+
+        if self.reduced is not None:
+            return self.reduced_instances
+        found: list[str] = []
+        for pos in range(self.definiens.order):
+            resolution = self.resolutions.get(pos)
+            if isinstance(resolution, LiteralResolution):
+                if resolution.source == "flatten" and pos not in self.unbraced:
+                    found.append(resolution.text)
+            elif isinstance(resolution, (ExpandResolution, InjectResolution)):
+                if not resolution.compressed:
+                    found.extend(resolution.child.instances())
+        return tuple(dict.fromkeys(found))
 
     def headword_at(self, pos: int) -> str:
         """Return the original headword demanded at this hole."""
@@ -524,31 +592,42 @@ class Demand:
 
     def _render_position(self, pos: int, escaped: bool = False) -> str:
         if pos not in self.resolutions:
-            return "{" + self.headword_at(pos) + "}"
+            # Still to be expanded: the bare headword.
+            return self.headword_at(pos)
 
         resolution = self.resolutions[pos]
-        if isinstance(resolution, RecallResolution):
-            if resolution.compressed:
-                return self.headword_at(pos)
-            return resolution.text
-        if isinstance(resolution, ExpandResolution):
-            if resolution.compressed:
-                return self.headword_at(pos)
-            if escaped:
-                return resolution.child.escaped_text()
-            return resolution.child.text()
         if isinstance(resolution, InjectResolution):
+            # A supplied call is still to be expanded, so it has no braces.
             if resolution.compressed:
                 return resolution.abbreviation or self.headword_at(pos)
             if escaped:
                 return resolution.child.escaped_text()
             return resolution.child.text()
-        if isinstance(resolution, LiteralResolution):
-            if escaped and resolution.inert:
-                return _escape_literal(resolution.text)
-            return resolution.text
 
-        raise RuntimeError(f"unknown resolution type: {resolution!r}")
+        if isinstance(resolution, RecallResolution):
+            if resolution.compressed:
+                text = self.headword_at(pos)
+            else:
+                text = resolution.text
+        elif isinstance(resolution, ExpandResolution):
+            if resolution.compressed:
+                text = self.headword_at(pos)
+            elif escaped:
+                text = resolution.child.escaped_text()
+            else:
+                text = resolution.child.text()
+        elif isinstance(resolution, LiteralResolution):
+            if escaped and resolution.inert:
+                text = _escape_literal(resolution.text)
+            else:
+                text = resolution.text
+        else:
+            raise RuntimeError(f"unknown resolution type: {resolution!r}")
+
+        # Dealt with: one pair of braces, unless a person took them out.
+        if pos in self.unbraced:
+            return text
+        return "{" + text + "}"
 
 
 @dataclass
@@ -625,11 +704,18 @@ class Trace:
             reduction=node.reduced,
         )
 
-    def reduce_node(self, node: Demand, text: str, detail: str) -> TraceEvent:
-        """Apply and record an evaluator response with its exact stimulus."""
+    def reduce_node(
+        self, node: Demand, text: str, detail: str,
+        instances: tuple[str, ...] = (),
+    ) -> TraceEvent:
+        """Apply and record an evaluator response with its exact stimulus.
+
+        ``instances`` are the headwords left unexpanded that the response
+        still names in braces; ``split_response`` finds them.
+        """
         before = self.snapshot(node)
         support = node.claim_support()
-        node.set_reduction(text)
+        node.set_reduction(text, instances)
         node._reduction_support = _combine_support(support, event_index=len(self.events))
         return self.record_event(
             "reduce", detail,
@@ -657,21 +743,50 @@ class Trace:
 
     def expand_node(
         self, sim, node: Demand, pos: int, index: int, detail: str,
+        replacement: Optional[str] = None,
     ) -> TraceEvent:
         """Apply dictionary entry ``index`` at an open hole as a child demand.
 
         The entry text is instantiated for the demanded call and analysed by
         ``sim`` here, so the recorded evidence is exactly what was inserted.
+
+        With ``replacement``, the person replaces the definition's text as
+        it goes in. That is three recorded steps: the entry is applied, the
+        headwords still in its text are left unexpanded, and the text is
+        replaced. A value therefore answers the wording of one entry, never
+        a bare headword. A replacement that names any other headword is
+        refused before anything is recorded. Returns the entry step.
         """
         before = self.snapshot(node)
         use = self._entry_use(sim, node, pos, index)
-        child = Demand(sim.analyse(use.text), provenance=ExpandProvenance(index))
+        definiens = sim.analyse(use.text)
+        carried: tuple[str, ...] = ()
+        if replacement is not None:
+            if not replacement.strip():
+                raise ValueError("a replacement needs some text")
+            carried, others = split_response(sim, definiens.headwords, replacement)
+            if others:
+                raise ValueError(
+                    f"{others} are headwords; a replacement may name only "
+                    "headwords of the text it replaces, written in braces"
+                )
+        child = Demand(definiens, provenance=ExpandProvenance(index))
         node.resolve_expand(pos, child, index)
         node._resolution_support[pos] = _ClaimSupport((len(self.events),))
-        return self.record_event(
+        event = self.record_event(
             "expand", detail,
             TraceChange(use.call, use.text, before, self.snapshot(node), pos, entry=use),
         )
+        if replacement is not None:
+            if child.open_positions:
+                self._flatten(
+                    child, list(child.open_positions),
+                    f"{detail}: headwords left unexpanded by the replacement",
+                )
+            self.reduce_node(
+                child, replacement, f"{detail}: text replaced", instances=carried,
+            )
+        return event
 
     def recall_node(
         self, sim, node: Demand, pos: int, index: int, detail: str,
@@ -700,9 +815,21 @@ class Trace:
     def inject_node(
         self, node: Demand, pos: int, child: Demand, text: str, detail: str,
     ) -> TraceEvent:
-        """Record supplied text before its child is evaluated or cleaned."""
-        before = self.snapshot(node)
+        """Record a supplied fuller call of the demanded headword.
+
+        Only a call of the same headword with arguments supplied is taken:
+        the list of members, say, or the next value of a counter. A value is
+        refused here. It goes in through a definition: apply an entry and
+        replace its text (``expand_node`` with ``replacement``).
+        """
+        node._check_open_position(pos)
         stimulus = node.headword_at(pos)
+        if not _is_fuller_call(stimulus, child.definiens):
+            raise ValueError(
+                f"{text!r} is not a fuller call of {stimulus!r}; a value goes "
+                "in through a definition: expand an entry and replace its text"
+            )
+        before = self.snapshot(node)
         node.resolve_inject(pos, child)
         node._resolution_support[pos] = _ClaimSupport((len(self.events),))
         return self.record_event(
@@ -743,6 +870,27 @@ class Trace:
             "clean", detail,
             TraceChange(
                 stimulus, text, before, self.snapshot(node), pos,
+                dependencies=support.event_indexes, dependencies_complete=support.complete,
+            ),
+        )
+
+    def set_braces_node(
+        self, node: Demand, pos: int, shown: bool, detail: str,
+    ) -> TraceEvent:
+        """Record taking out, or putting back, the braces round a filled position.
+
+        The braces are text, so this is a wording edit like any other: the
+        record says the text means the same with the change.
+        """
+        before = self.snapshot(node)
+        support = node.claim_support(underlying=True)
+        node.set_braces(pos, shown)
+        node._resolution_support[pos] = _combine_support(support, event_index=len(self.events))
+        after = self.snapshot(node)
+        return self.record_event(
+            "clean", detail,
+            TraceChange(
+                _snapshot_prose(before), _snapshot_prose(after), before, after, pos,
                 dependencies=support.event_indexes, dependencies_complete=support.complete,
             ),
         )
@@ -809,7 +957,7 @@ class Trace:
         )
 
     def _flatten(self, node: Demand, positions: list[int], detail: str) -> TraceEvent:
-        """Leave headwords unexpanded, as plain text, and record which ones."""
+        """Leave headwords unexpanded, in braces, and record which ones."""
         before = self.snapshot(node)
         headwords = [node.headword_at(pos) for pos in positions]
         for pos, headword in zip(positions, headwords):
@@ -849,7 +997,7 @@ def _snapshot_prose(snapshot: NodeSnapshot) -> str:
     arguments = {arg.position: arg.text for arg in snapshot.arguments}
     parts = [snapshot.latents[0]]
     for pos, headword in enumerate(snapshot.headwords):
-        parts.extend((arguments.get(pos, "{" + headword + "}"), snapshot.latents[pos + 1]))
+        parts.extend((arguments.get(pos, headword), snapshot.latents[pos + 1]))
     return "".join(parts)
 
 
@@ -867,3 +1015,42 @@ def _format_position_event(positions: list[int]) -> str:
     if len(positions) == 1:
         return f"active position {positions[0]}"
     return f"active positions {_format_positions(positions)}"
+
+
+def split_response(sim, allowed, text: str) -> tuple[tuple[str, ...], list[str]]:
+    """Sort the headwords a response names.
+
+    ``allowed`` are the headwords left unexpanded in the text being
+    replaced. A response may carry one of them over by writing it in
+    braces, as it stood. Returns ``(carried, others)``: the allowed ones
+    the response names in braces, and every other headword it names.
+    Backtick-escaped text is never a headword.
+    """
+
+    carried: list[str] = []
+    remainder = text
+    for headword in sorted(dict.fromkeys(allowed), key=len, reverse=True):
+        token = "{" + headword + "}"
+        if token in remainder:
+            carried.append(headword)
+            remainder = remainder.replace(token, " ")
+    others = sorted(set(sim.analyse(remainder).headwords))
+    return tuple(carried), others
+
+
+def _is_fuller_call(demanded: str, supplied: Definiens) -> bool:
+    """Whether the supplied text is one call of the demanded headword and
+    nothing else, different from the demand and with no fewer arguments."""
+
+    if supplied.order != 1 or any(supplied.residual.latent):
+        return False
+    try:
+        asked = HeadwordCall.parse(demanded)
+        given = HeadwordCall.parse(supplied.headwords[0])
+    except HeadwordApplicationError:
+        return False
+    return (
+        given.stem == asked.stem
+        and given.text != asked.text
+        and given.arity >= asked.arity
+    )

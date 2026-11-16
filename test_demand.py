@@ -65,7 +65,7 @@ class TestRecallResolution:
         d.resolve_recall(0, "mass times acceleration", source_index=7)
         assert d.open_positions == []
         assert d.is_resolved
-        assert d.text() == "force is mass times acceleration"
+        assert d.text() == "force is {mass times acceleration}"
         assert d.resolutions[0] == RecallResolution(
             "mass times acceleration",
             7,
@@ -79,7 +79,7 @@ class TestRecallResolution:
             source_index=7,
             compressed=True,
         )
-        assert d.text() == "force is net-force"
+        assert d.text() == "force is {net-force}"
 
     def test_recall_double_resolution_raises(self):
         d = demand(["", ""], ["mass"])
@@ -107,7 +107,7 @@ class TestExpandResolution:
         assert parent.children() == {0: child}
         assert child.parent is parent
         assert parent.is_resolved
-        assert parent.text() == "because mass times acceleration"
+        assert parent.text() == "because {mass times acceleration}"
         assert isinstance(parent.resolutions[0], ExpandResolution)
 
     def test_expand_parent_waits_for_child_to_resolve(self):
@@ -116,12 +116,12 @@ class TestExpandResolution:
         parent.resolve_expand(0, child, source_index=3)
 
         assert not parent.is_resolved
-        assert parent.text() == "because {mass} times {acceleration}"
+        assert parent.text() == "because {mass times acceleration}"
 
         child.resolve_recall(0, "2 kg", source_index=10)
         child.resolve_recall(1, "5 m/s^2", source_index=11)
         assert parent.is_resolved
-        assert parent.text() == "because 2 kg times 5 m/s^2"
+        assert parent.text() == "because {{2 kg} times {5 m/s^2}}"
 
     def test_expand_can_render_compressed_headword(self):
         parent = demand(["because ", ""], ["force"])
@@ -132,7 +132,7 @@ class TestExpandResolution:
             source_index=3,
             compressed=True,
         )
-        assert parent.text() == "because force"
+        assert parent.text() == "because {force}"
 
 
 class TestInjectResolution:
@@ -177,7 +177,7 @@ class TestLiteralResolution:
         d.resolve_literal(0, "mass", inert=True, source="flatten")
 
         assert d.open_positions == [1]
-        assert d.text() == "mass times {acceleration}"
+        assert d.text() == "{mass} times acceleration"
         assert d.resolutions[0] == LiteralResolution(
             text="mass",
             inert=True,
@@ -194,8 +194,8 @@ class TestLiteralResolution:
             source="flatten",
         )
 
-        assert d.text() == "mass times acceleration"
-        assert d.escaped_text() == "`mass` times `acceleration`"
+        assert d.text() == "{mass} times {acceleration}"
+        assert d.escaped_text() == "{`mass`} times {`acceleration`}"
 
 
 class TestUnresolveAndCompression:
@@ -205,7 +205,7 @@ class TestUnresolveAndCompression:
         d.resolve_recall(0, "3 kg", source_index=5)
         d.unresolve(0)
         assert d.open_positions == [0]
-        assert d.text() == "{mass}"
+        assert d.text() == "mass"
 
     def test_unresolve_orphans_expand_child(self):
         parent = demand(["", ""], ["force"])
@@ -231,14 +231,14 @@ class TestUnresolveAndCompression:
         d = demand(["", ""], ["mass"])
         d.resolve_recall(0, "3 kg", source_index=5)
         d.set_compression(0, True)
-        assert d.text() == "mass"
+        assert d.text() == "{mass}"
 
     def test_set_compression_replaces_expand_resolution(self):
         parent = demand(["", ""], ["force"])
         child = demand(["mass times acceleration"], [])
         parent.resolve_expand(0, child, source_index=3)
         parent.set_compression(0, True)
-        assert parent.text() == "force"
+        assert parent.text() == "{force}"
 
     def test_set_compression_replaces_inject_resolution(self):
         parent = demand(["", ""], ["string"])
@@ -263,7 +263,7 @@ class TestMixedRendering:
 
         assert d.open_positions == [1]
         assert not d.is_resolved
-        assert d.text() == "A raw-x B {y} C child"
+        assert d.text() == "A {raw-x} B y C {child}"
 
 
 class TestAncestorCycle:
@@ -335,14 +335,14 @@ class TestReduction:
         child = demand(["5 * 3"], [])
         parent.resolve_expand(0, child, source_index=1)
         child.set_reduction("15")
-        assert parent.text() == "F = 15"
+        assert parent.text() == "F = {15}"
 
     def test_compression_masks_child_reduction(self):
         parent = demand(["F = ", ""], ["force"])
         child = demand(["5 * 3"], [])
         parent.resolve_expand(0, child, source_index=1, compressed=True)
         child.set_reduction("15")
-        assert parent.text() == "F = force"
+        assert parent.text() == "F = {force}"
 
     def test_clear_reduction_restores_full_render(self):
         d = demand(["", " * ", ""], ["mass", "mass"])
@@ -350,7 +350,7 @@ class TestReduction:
         d.resolve_recall(1, "3", source_index=1)
         d.set_reduction("15")
         d.clear_reduction()
-        assert d.text() == "5 * 3"
+        assert d.text() == "{5} * {3}"
 
     def test_unresolve_clears_reduction_up_chain(self):
         root = demand(["", ""], ["force"])
@@ -394,10 +394,10 @@ class TestReduction:
         child.resolve_literal(1, "3", inert=True, source="flatten")
         child.set_reduction("15")
 
-        assert parent.text() == "F = 15"
-        assert parent.escaped_text() == "F = 15"
+        assert parent.text() == "F = {15}"
+        assert parent.escaped_text() == "F = {15}"
         child.clear_reduction()
-        assert parent.escaped_text() == "F = `5` * `3`"
+        assert parent.escaped_text() == "F = {{`5`} * {`3`}}"
 
 
 class TestCleanup:
@@ -405,7 +405,7 @@ class TestCleanup:
     def test_set_latents_rewrites_render(self):
         d = demand(["", " times ", ""], ["mass", "acceleration"])
         d.set_latents(["", " multiplied by ", ""])
-        assert d.text() == "{mass} multiplied by {acceleration}"
+        assert d.text() == "mass multiplied by acceleration"
 
     def test_set_latents_arity_mismatch_raises(self):
         d = demand(["", " times ", ""], ["mass", "acceleration"])
@@ -418,7 +418,7 @@ class TestCleanup:
         d.set_latents(["the ", " by ", " value"])
         assert d.definiens.headwords == ["mass", "acceleration"]
         assert d.open_positions == [1]
-        assert d.text() == "the 2 kg by {acceleration} value"
+        assert d.text() == "the {2 kg} by acceleration value"
 
     def test_set_latents_marks_cleaned(self):
         d = demand(["done"], [])
@@ -431,7 +431,7 @@ class TestCleanup:
         d.resolve_recall(0, "mass times acceleration", source_index=7)
         d.clean_recall_text(0, "the product of mass and acceleration")
         assert d.text() == (
-            "force is the product of mass and acceleration"
+            "force is {the product of mass and acceleration}"
         )
         assert d.resolutions[0].source_index == 7
 
@@ -497,7 +497,7 @@ class TestTrace:
             ("trace", "started from 'find force'")
         ]
         asked = trace.events[0].change
-        assert (asked.stimulus, asked.response) == ("find force", "find {force}")
+        assert (asked.stimulus, asked.response) == ("find force", "find force")
         assert asked.before == asked.after
         assert asked.before.address == ()
 
@@ -567,8 +567,8 @@ class TestTrace:
         assert positions == [0, 1]
         assert trace.active is root
         assert root.open_positions == []
-        assert root.text() == "mass times acceleration"
-        assert root.escaped_text() == "`mass` times `acceleration`"
+        assert root.text() == "{mass} times {acceleration}"
+        assert root.escaped_text() == "{`mass`} times {`acceleration`}"
         assert trace.is_complete
         assert [(e.kind, e.detail) for e in trace.events] == [
             ("flatten", "active positions 0, 1")
@@ -577,8 +577,8 @@ class TestTrace:
         assert (left.stimulus, left.response, left.position) == (
             "mass, acceleration", "mass, acceleration", None,
         )
-        assert left.before.render == "{mass} times {acceleration}"
-        assert left.after.render == "mass times acceleration"
+        assert left.before.render == "mass times acceleration"
+        assert left.after.render == "{mass} times {acceleration}"
         assert [a.resolution for a in left.after.arguments] == ["LiteralResolution"] * 2
 
     def test_flatten_active_position_resolves_one_position(self):
@@ -587,13 +587,13 @@ class TestTrace:
 
         assert trace.flatten_active_position(1) == [1]
         assert root.open_positions == [0]
-        assert root.text() == "{mass} times acceleration"
+        assert root.text() == "mass times {acceleration}"
         assert [(e.kind, e.detail) for e in trace.events] == [
             ("flatten", "active position 1")
         ]
         left = trace.events[0].change
         assert (left.stimulus, left.position) == ("acceleration", 1)
-        assert left.after.render == "{mass} times acceleration"
+        assert left.after.render == "mass times {acceleration}"
 
     def test_flatten_refusals_record_nothing(self):
         root = demand(["", " times ", ""], ["mass", "acceleration"])

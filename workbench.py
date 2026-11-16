@@ -13,9 +13,11 @@ from pathlib import Path
 import re
 from uuid import UUID, uuid4
 
+from application import HeadwordApplicationError
 from demand import (
     Demand, ExpandResolution, InjectProvenance,
     InjectResolution, LiteralResolution, RecallResolution, Trace,
+    split_response,
 )
 from engine import VDInstance
 from prediction_set import build_prediction_set
@@ -183,6 +185,11 @@ def _snapshot(trace, sim, command_index, title):
                 'child_frame_id': _frame_id((*address, position))
                 if isinstance(resolution, (ExpandResolution, InjectResolution)) else None,
                 'source_index': getattr(resolution, 'source_index', None),
+                # Whether the text shows braces round this position: a headword
+                # that has been dealt with, unless a person took them out.
+                'braced': (resolution is not None
+                           and not isinstance(resolution, InjectResolution)
+                           and position not in node.unbraced),
                 'candidates': candidates,
             }
             budget({key: value for key, value in hole.items() if key != 'candidates'})
@@ -205,10 +212,11 @@ def _snapshot(trace, sim, command_index, title):
 
 def _command(value):
     _keys(value, ('operation', 'frame_id'),
-          ('position', 'entry_index', 'response', 'latents', 'note'), 'command')
+          ('position', 'entry_index', 'response', 'latents', 'shown', 'note'), 'command')
     operation = value['operation']
     if type(operation) is not str or operation not in {
-            'expand', 'recall', 'inject', 'flatten', 'reduce', 'reopen', 'clean', 'issue'}:
+            'expand', 'recall', 'inject', 'flatten', 'reduce', 'reopen', 'clean', 'braces',
+            'issue'}:
         raise RecordError('unsupported command operation')
     _text(value['frame_id'], 'frame ID', maximum=128)
     if not re.fullmatch(r'F(?:/(?:0|[1-9][0-9]*))*', value['frame_id']):
@@ -218,7 +226,7 @@ def _command(value):
     extras = {'expand': {'position', 'entry_index'}, 'recall': {'position', 'entry_index'},
               'inject': {'position', 'response'}, 'flatten': {'position'},
               'reduce': {'response'}, 'reopen': set(), 'clean': {'latents'},
-              'issue': set()}[operation]
+              'braces': {'position', 'shown'}, 'issue': set()}[operation]
     if set(value) - {'operation', 'frame_id', 'note'} != extras:
         raise RecordError(f'{operation} requires exactly {", ".join(sorted(extras)) or "no extra fields"}')
     for field in ('position', 'entry_index'):
@@ -226,6 +234,8 @@ def _command(value):
             _integer(value[field], field)
     if 'response' in extras:
         _text(value['response'], 'response')
+    if 'shown' in extras and type(value['shown']) is not bool:
+        raise RecordError('shown must be true or false')
     if 'latents' in extras:
         if type(value['latents']) is not list or len(value['latents']) > MAX_HOLES + 1:
             raise RecordError('latents must be a bounded string array')
@@ -265,7 +275,15 @@ def _execute(trace, sim, command):
             raise RecordError('only the root result can be issued; use frame F')
         trace.issue(detail)
     elif operation == 'reduce':
-        trace.reduce_node(node, command['response'], detail)
+        # A response may keep a headword left unexpanded by writing it in
+        # braces as it stood. Other headwords in it stay plain text, as before.
+        try:
+            carried, _ = split_response(sim, node.instances(), command['response'])
+        except HeadwordApplicationError:
+            carried = ()
+        trace.reduce_node(node, command['response'], detail, instances=carried)
+    elif operation == 'braces':
+        trace.set_braces_node(node, position, command['shown'], f'{detail}; position {position}')
     elif operation == 'reopen':
         trace.unreduce_node(node, detail)
     else:

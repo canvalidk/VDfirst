@@ -46,11 +46,25 @@ def rehash(record):
     return record
 
 
+def value(record, frame_id, position, entry_index, response):
+    """Give a value the only way the engine takes one: expand the headword
+    into a definition and replace that definition's text.
+
+    Both definitions used here name their own headword ("supplied mass of
+    p"), which the engine reads as a demand, so it is left unexpanded first.
+    The bridge records one step per command, hence three commands.
+    """
+    record = command(record, "expand", frame_id, position=position, entry_index=entry_index)
+    child = f"{frame_id}/{position}"
+    record = command(record, "flatten", child, position=0)
+    return command(record, "reduce", child, response=response)
+
+
 def supplied_calculation():
     record = start_record(DICTIONARY, "force_cart_0", "Cart experiment, t = 0")
     record = command(record, "expand", position=0, entry_index=0)
-    record = command(record, "inject", "F/0", position=0, response="2 kg")
-    return command(record, "inject", "F/0", position=1, response="5 m/s^2")
+    record = value(record, "F/0", 0, 1, "2 kg")
+    return value(record, "F/0", 1, 2, "5 m/s^2")
 
 
 def correction_record():
@@ -87,12 +101,12 @@ def test_start_records_exact_dictionary_question_and_initial_snapshot():
     assert latest(record)["root_frame_id"] == "F"
     assert frame(record)["address"] == []
     assert frame(record)["parent_id"] is None
-    assert frame(record)["render"] == "{force_cart_0}"
+    assert frame(record)["render"] == "force_cart_0"
     assert not frame(record)["resolved"]
     asked = latest(record)["prediction_set"]["predictions"]
     assert [(item["id"], item["kind"]) for item in asked] == [("P0", "normalization")]
     assert asked[0]["evidence"]["stimulus"] == "force_cart_0"
-    assert record["events"][0]["change"]["response"] == "{force_cart_0}"
+    assert record["events"][0]["change"]["response"] == "force_cart_0"
     supplied["entries"][0][1] = "altered outside the record"
     assert record["dictionary"]["entries"][0]["definition"] == DICTIONARY["entries"][0][1]
 
@@ -109,7 +123,7 @@ def test_engine_candidates_preserve_duplicate_choices_and_instantiate_parameters
     ]
     assert hole["candidates"][0]["definition"] == "mass_p times acceleration_p_t"
     alternative = command(record, "expand", position=0, entry_index=3)
-    assert frame(alternative, "F/0")["render"] == "{acceleration_cart_0} times {mass_cart}"
+    assert frame(alternative, "F/0")["render"] == "acceleration_cart_0 times mass_cart"
     assert frame(alternative, "F/0")["source_index"] == 3
     assert frame(alternative)["holes"][0]["source_index"] == 3
     assert frame(record)["holes"][0]["resolution"] is None
@@ -118,7 +132,7 @@ def test_engine_candidates_preserve_duplicate_choices_and_instantiate_parameters
 def test_recall_is_literal_while_expand_analyses_the_instantiated_definition():
     record = start_record(DICTIONARY, "force_cart_0")
     recalled = command(record, "recall", position=0, entry_index=0)
-    assert frame(recalled)["render"] == "mass_cart times acceleration_cart_0"
+    assert frame(recalled)["render"] == "{mass_cart times acceleration_cart_0}"
     assert frame(recalled)["resolved"]
     assert frame(recalled)["holes"][0]["resolution"] == "recall"
     assert frame(recalled)["holes"][0]["child_frame_id"] is None
@@ -152,46 +166,73 @@ def test_recall_is_literal_while_expand_analyses_the_instantiated_definition():
     assert latest(expanded)["prediction_set"]["dependency_selection_complete"]
 
 
-def test_supplied_input_is_analysed_and_keeps_its_exact_claim_evidence():
-    record = start_record(DICTIONARY, "mass_cart")
-    supplied = command(record, "inject", position=0, response="acceleration_cart_0", note="reader input")
+def test_supplied_fuller_call_is_analysed_and_keeps_its_exact_claim_evidence():
+    record = start_record(DICTIONARY, "mass")
+    supplied = command(record, "inject", position=0, response="mass_cart", note="reader input")
     assert frame(supplied)["holes"][0]["resolution"] == "inject"
+    assert frame(supplied)["holes"][0]["braced"] is False
+    assert frame(supplied)["render"] == "mass_cart"
     assert frame(supplied, "F/0")["source_index"] is None
-    assert frame(supplied, "F/0")["headwords"] == ["acceleration_cart_0"]
+    assert frame(supplied, "F/0")["headwords"] == ["mass_cart"]
     assert not latest(supplied)["prediction_set"]["trace_complete"]
     claim = latest(supplied)["prediction_set"]["predictions"][-1]
     assert claim["id"] == "P1"
     assert claim["kind"] == "supplied_input"
-    assert claim["evidence"]["stimulus"] == "mass_cart"
-    assert claim["evidence"]["response"] == "acceleration_cart_0"
+    assert claim["evidence"]["stimulus"] == "mass"
+    assert claim["evidence"]["response"] == "mass_cart"
     assert claim["evidence"]["position"] == 0
     assert claim["verification"] == "unchecked"
+
+
+@pytest.mark.parametrize("response", ["2 kg", "acceleration_cart_0", "mass_cart", "mass_cart and more"])
+def test_only_a_fuller_call_of_the_demanded_headword_can_be_supplied(response):
+    # A value, a call of another headword, the demand itself and prose are all refused.
+    record = start_record(DICTIONARY, "mass_cart")
+    before = copy.deepcopy(record)
+    with pytest.raises(ValueError, match="not a fuller call of 'mass_cart'"):
+        command(record, "inject", position=0, response=response)
+    assert record == before
+
+
+def test_a_value_replaces_the_text_of_a_definition():
+    record = start_record(DICTIONARY, "mass_cart")
+    record = value(record, "F", 0, 1, "2 kg")
+    assert frame(record)["render"] == "{2 kg}"
+    kinds = [item["kind"] for item in latest(record)["prediction_set"]["predictions"]]
+    assert kinds == ["normalization", "entry_application", "left_unexpanded", "meaning_preservation"]
+    claim = latest(record)["prediction_set"]["predictions"][-1]
+    assert claim["evidence"]["stimulus"] == "supplied {mass} of cart"
+    assert claim["evidence"]["response"] == "2 kg"
+    assert claim["statement"] == (
+        "What is meant by 'supplied {mass} of cart' is the same as what is meant by '2 kg' "
+        "in the recorded context."
+    )
 
 
 def test_correction_preserves_mistake_but_replaces_its_current_support():
     record = correction_record()
     snapshots = record["snapshots"]
-    mistaken = snapshots[5]["prediction_set"]
-    reopened = snapshots[6]["prediction_set"]
+    mistaken = snapshots[9]["prediction_set"]
+    reopened = snapshots[10]["prediction_set"]
     corrected = latest(record)["prediction_set"]
     assert mistaken["result"] == "Prediction: 12 N"
-    assert reopened["result"] == "2 kg times 5 m/s^2"
+    assert reopened["result"] == "{{2 kg} times {5 m/s^2}}"
     assert corrected["result"] == "Prediction: 10 N"
     old_claims = [item for item in corrected["predictions"] if item["evidence"]["response"] in ("12 N", "Prediction: 12 N")]
     assert len(old_claims) == 2
     assert {item["id"] for item in old_claims} <= set(corrected["historical_prediction_ids"])
     assert not ({item["id"] for item in old_claims} & set(corrected["current_prediction_ids"]))
     correction = next(item for item in corrected["predictions"] if item["evidence"]["response"] == "10 N")
-    assert correction["evidence"]["stimulus"] == "2 kg times 5 m/s^2"
+    assert correction["evidence"]["stimulus"] == "{2 kg} times {5 m/s^2}"
     assert correction["evidence"]["before"]["address"] == [0]
     assert correction["evidence"]["before"]["source_index"] == 0
     assert correction["evidence"]["before"]["headwords"] == ["mass_cart", "acceleration_cart_0"]
-    assert [item["text"] for item in correction["evidence"]["before"]["arguments"]] == ["2 kg", "5 m/s^2"]
+    assert [item["text"] for item in correction["evidence"]["before"]["arguments"]] == ["{2 kg}", "{5 m/s^2}"]
     assert correction["id"] in corrected["current_prediction_ids"]
     report = corrected["predictions"][-1]
     assert correction["event_index"] in report["evidence"]["dependencies"]
-    assert frame({"snapshots": [snapshots[6]]})["reduced"] is None
-    assert frame({"snapshots": [snapshots[6]]}, "F/0")["reduced"] is None
+    assert frame({"snapshots": [snapshots[10]]})["reduced"] is None
+    assert frame({"snapshots": [snapshots[10]]}, "F/0")["reduced"] is None
     assert corrected["dependency_selection_complete"]
     assert not corrected["coverage_complete"]
     assert all(item["verification"] == "unchecked" for item in corrected["predictions"])
@@ -214,7 +255,7 @@ def test_clean_records_prose_change_without_replacing_holes_or_children():
     after = frame(record, "F/0")
     assert after["headwords"] == before["headwords"]
     assert after["holes"] == before["holes"]
-    assert after["render"] == "2 kg multiplied by 5 m/s^2"
+    assert after["render"] == "{2 kg} multiplied by {5 m/s^2}"
     change = latest(record)["prediction_set"]["predictions"][-1]
     assert change["operation"] == "clean"
     assert change["verification"] == "unchecked"
@@ -236,7 +277,7 @@ def test_json_roundtrip_validates_and_can_continue_without_changing_saved_histor
     assert continued["commands"][:-1] == saved["commands"]
     assert continued["snapshots"][:-1] == saved["snapshots"]
     assert continued["events"][:len(saved["events"])] == saved["events"]
-    assert latest(continued)["prediction_set"]["result"] == "10 N"
+    assert latest(continued)["prediction_set"]["result"] == "{10 N}"
     assert validate_record(json.loads(json.dumps(continued))) == continued
 
 
@@ -262,7 +303,7 @@ def test_validation_returns_detached_data_and_checksum_covers_question_metadata(
     source = supplied_calculation()
     returned = validate_record(source)
     returned["snapshots"][-1]["frames"][0]["render"] = "caller edit"
-    assert frame(source)["render"] == "2 kg times 5 m/s^2"
+    assert frame(source)["render"] == "{{2 kg} times {5 m/s^2}}"
     altered = copy.deepcopy(source)
     altered["question"]["context"] = "different experimental account"
     with pytest.raises(ValueError):
@@ -454,7 +495,7 @@ def test_flatten_is_a_recorded_command_with_its_own_hole_state():
     hole = frame(record, "F/0")["holes"][1]
     assert hole["resolution"] == "flatten"
     assert hole["candidates"] == [] and hole["child_frame_id"] is None
-    assert frame(record, "F/0")["render"] == "{mass_cart} times acceleration_cart_0"
+    assert frame(record, "F/0")["render"] == "mass_cart times {acceleration_cart_0}"
     claim = latest(record)["prediction_set"]["predictions"][-1]
     assert (claim["id"], claim["kind"]) == ("P2", "left_unexpanded")
     assert claim["evidence"]["stimulus"] == "acceleration_cart_0"
@@ -470,24 +511,29 @@ def test_issuing_freezes_what_each_result_rested_on():
     fresh = start_record(DICTIONARY, "force_cart_0")
     with pytest.raises(ValueError, match="open holes"):
         command(fresh, "issue")
-    record = supplied_calculation()  # events 0-3: question, entry application, two inputs
+    # Events 0-7: the question, the entry application, then for each of the
+    # two values an entry application, a headword left unexpanded and the
+    # replacement of the definition's text.
+    record = supplied_calculation()
     with pytest.raises(ValueError, match="only the root"):
         command(record, "issue", "F/0")
-    record = command(record, "reduce", "F/0", response="12 N")        # event 4
-    record = command(record, "reduce", response="Prediction: 12 N")   # 5
-    record = command(record, "issue", note="first answer")            # 6
+    record = command(record, "reduce", "F/0", response="12 N")        # event 8
+    record = command(record, "reduce", response="Prediction: 12 N")   # 9
+    record = command(record, "issue", note="first answer")            # 10
     when_issued = latest(record)["prediction_set"]
-    record = command(record, "reopen", "F/0")                         # 7
-    record = command(record, "reduce", "F/0", response="10 N")        # 8
-    record = command(record, "reduce", response="Prediction: 10 N")   # 9
-    record = command(record, "issue", note="redone")                  # 10
+    record = command(record, "reopen", "F/0")                         # 11
+    record = command(record, "reduce", "F/0", response="10 N")        # 12
+    record = command(record, "reduce", response="Prediction: 10 N")   # 13
+    record = command(record, "issue", note="redone")                  # 14
     final = latest(record)["prediction_set"]
     first, second = final["issued"]
-    assert (first["id"], first["demand"], first["result"]) == ("I6", "force_cart_0", "Prediction: 12 N")
-    assert first["prediction_ids"] == ["P0", "P1", "P2", "P3", "P4", "P5"]
+    assert (first["id"], first["demand"], first["result"]) == ("I10", "force_cart_0", "Prediction: 12 N")
+    assert first["prediction_ids"] == [f"P{index}" for index in range(10)]
     assert first["prediction_ids"] == when_issued["current_prediction_ids"]
-    assert (second["id"], second["result"]) == ("I10", "Prediction: 10 N")
-    assert second["prediction_ids"] == ["P0", "P1", "P2", "P3", "P8", "P9"] == final["current_prediction_ids"]
+    assert (second["id"], second["result"]) == ("I14", "Prediction: 10 N")
+    assert second["prediction_ids"] == [
+        "P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P12", "P13",
+    ] == final["current_prediction_ids"]
     assert first["dependency_selection_complete"] and second["dependency_selection_complete"]
     assert first["statement"] == (
         "The result 'Prediction: 12 N' holds for the demand 'force_cart_0' in the recorded context."
@@ -496,5 +542,5 @@ def test_issuing_freezes_what_each_result_rested_on():
     # The first issue is not rewritten by the redo, and an issue is not itself a candidate.
     assert when_issued["issued"] == [first]
     assert all(item["operation"] != "issue" for item in final["predictions"])
-    assert final["schema_version"] == 5
+    assert final["schema_version"] == 6
     assert validate_record(record) == record

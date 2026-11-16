@@ -19,6 +19,11 @@ definition is forced by the form of the argument.
 The dictionary below is a prototype for exercising the engine. Its wording is
 not proposed entry text. Every response is scripted; nothing is computed or
 checked by the engine.
+
+Since 15 November 2026 a value never answers a bare headword: each supplied
+value replaces the text of the definition its headword is expanded into, and
+the list of members is the one thing supplied as a fuller call. The wordings
+below carry the braces the engine puts round every expansion.
 """
 
 from __future__ import annotations
@@ -55,7 +60,8 @@ MEMBERS = {
     "B": "[A:spring:s2,A:gravity:B]",
 }
 
-# What a person supplies at each demand the dictionary leaves to them.
+# What a person gives for each of these demands, as a replacement of the text
+# of the one definition the demand expands into.
 SUPPLIED = {
     "haze_A": "0 N", "haze_B": "0 N",
     "inertial-mass_A": "2 kg", "inertial-mass_B": "1 kg",
@@ -66,22 +72,24 @@ SUPPLIED = {
 }
 
 # Scripted interpreter responses, keyed by the exact wording they answer.
+# A doubled brace is an expansion whose whole text is another expansion: the
+# impressed force of a member is defined as that member's action or reaction.
 RESPONSES = {
-    "the negative of 20 N/m times -1 m": "20 N",
-    "the negative of 10 N/m times -1/2 m": "5 N",
-    "the negative of 5 N": "-5 N",
-    "the negative of 2 kg times 49/5 m/s^2": "-98/5 N",
-    "the negative of 1 kg times 49/5 m/s^2": "-49/5 N",
+    "the negative of {20 N/m} times {-1 m}": "20 N",
+    "the negative of {10 N/m} times {-1/2 m}": "5 N",
+    "the negative of {5 N}": "-5 N",
+    "the negative of {2 kg} times {49/5 m/s^2}": "-98/5 N",
+    "the negative of {1 kg} times {49/5 m/s^2}": "-49/5 N",
     "the zero vector": "0 N",
-    "-98/5 N plus 0 N": "-98/5 N",
-    "-49/5 N plus 0 N": "-49/5 N",
-    "-5 N plus -98/5 N": "-123/5 N",
-    "20 N plus -123/5 N": "-23/5 N",
-    "5 N plus -49/5 N": "-24/5 N",
-    "0 N plus -23/5 N": "-23/5 N",
-    "0 N plus -24/5 N": "-24/5 N",
-    "-23/5 N divided by 2 kg": "-23/10 m/s^2",
-    "-24/5 N divided by 1 kg": "-24/5 m/s^2",
+    "{{-98/5 N}} plus {0 N}": "-98/5 N",
+    "{{-49/5 N}} plus {0 N}": "-49/5 N",
+    "{{-5 N}} plus {-98/5 N}": "-123/5 N",
+    "{{20 N}} plus {-123/5 N}": "-23/5 N",
+    "{{5 N}} plus {-49/5 N}": "-24/5 N",
+    "{0 N} plus {-23/5 N}": "-23/5 N",
+    "{0 N} plus {-24/5 N}": "-24/5 N",
+    "{-23/5 N} divided by {2 kg}": "-23/10 m/s^2",
+    "{-24/5 N} divided by {1 kg}": "-24/5 m/s^2",
 }
 
 
@@ -105,9 +113,14 @@ def trace_object(sim: Simulator, obj: str, members: str | None = None) -> Trace:
                 child = Demand(sim.analyse(text), provenance=InjectProvenance(text))
                 trace.inject_node(node, pos, child, text, f"the members acting on {obj}")
             elif call in SUPPLIED:
-                text = SUPPLIED[call]
-                child = Demand(sim.analyse(text), provenance=InjectProvenance(text))
-                trace.inject_node(node, pos, child, text, f"supplied {call}")
+                answering = sim.entry_indexes(call)
+                if len(answering) != 1:
+                    raise ValueError(f"{call!r} is answered by {len(answering)} entries; the demo expects one")
+                trace.expand_node(
+                    sim, node, pos, answering[0], f"supplied {call}",
+                    replacement=SUPPLIED[call],
+                )
+                continue
             else:
                 answering = sim.entry_indexes(call)
                 if len(answering) != 1:
